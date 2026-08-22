@@ -1,9 +1,9 @@
 Package: cn.example.kbedittoolbar
 Name: Keyboard Edit Toolbar (学习版)
-Version: 0.2.0
+Version: 0.3.0
 Architecture: iphoneos-arm64
-Description: Keyboard toolbar with editing shortcuts and long-press actions.
+Description: Keyboard toolbar with composing-text clearing and per-button X/Y layout settings.
 Maintainer: you
 Author: you
 Section: Tweaks
-Depends: mobilesubstrate
+Depends: mobilesubstrate, preferenceloader

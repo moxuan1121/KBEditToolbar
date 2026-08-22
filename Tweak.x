@@ -42,7 +42,28 @@
 @end
 
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
+static const NSInteger kButtonTagBase = 0x4B60;
 static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
+static NSString *const kPreferencesDomain = @"cn.example.kbedittoolbar.preferences";
+
+static NSArray<NSString *> *KBButtonXPreferenceKeys(void) {
+    return @[@"pasteX", @"leftX", @"rightX", @"dismissX"];
+}
+
+static NSArray<NSString *> *KBButtonYPreferenceKeys(void) {
+    return @[@"pasteY", @"leftY", @"rightY", @"dismissY"];
+}
+
+static CGFloat KBPreferenceFloat(NSString *key) {
+    CFPropertyListRef value = CFPreferencesCopyAppValue(
+        (__bridge CFStringRef)key, (__bridge CFStringRef)kPreferencesDomain);
+    CGFloat result = 0.0;
+    if (value && CFGetTypeID(value) == CFNumberGetTypeID()) {
+        result = [(__bridge NSNumber *)value doubleValue];
+    }
+    if (value) CFRelease(value);
+    return result;
+}
 
 // --- Resolve the text input owned by the active keyboard --------------------
 static __weak id gCaptured;
@@ -223,22 +244,91 @@ static void KBMoveCaretToBoundary(BOOL beginning) {
 }
 
 static void KBClearAllText(void) {
-    id delegate = KBCurrentInputDelegate(NULL);
+    UIKeyboardImpl *keyboard = nil;
+    id delegate = KBCurrentInputDelegate(&keyboard);
     if (!delegate) return;
-    KBSelectAll(delegate);
+
+    // Pinyin/Japanese and other IMEs keep uncommitted keystrokes in a marked
+    // text range. Calling UIKeyboardImpl deleteFromInput at this point removes
+    // only one composing key. Remove the marked range first and end composition.
+    UITextRange *markedRange = nil;
+    if ([delegate respondsToSelector:@selector(markedTextRange)]) {
+        markedRange = [delegate markedTextRange];
+    }
+    if (markedRange &&
+        [delegate respondsToSelector:@selector(replaceRange:withText:)]) {
+        [delegate replaceRange:markedRange withText:@""];
+    } else if (markedRange &&
+               [delegate respondsToSelector:@selector(setMarkedText:selectedRange:)]) {
+        [delegate setMarkedText:@"" selectedRange:NSMakeRange(0, 0)];
+    }
+    if ([delegate respondsToSelector:@selector(unmarkText)]) {
+        [delegate unmarkText];
+    }
+    KBRefreshKeyboardState(keyboard);
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                  (int64_t)(kSecondActionDelay * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        UIKeyboardImpl *keyboard = nil;
-        id currentDelegate = KBCurrentInputDelegate(&keyboard);
-        if ([keyboard respondsToSelector:@selector(deleteFromInput)]) {
-            [keyboard deleteFromInput];
-            KBRefreshKeyboardState(keyboard);
-        } else if ([currentDelegate respondsToSelector:@selector(deleteBackward)]) {
-            [currentDelegate deleteBackward];
+        UIKeyboardImpl *currentKeyboard = nil;
+        id currentDelegate = KBCurrentInputDelegate(&currentKeyboard);
+        UITextRange *fullRange = KBFullTextRange(currentDelegate);
+
+        // Replacing the complete document range bypasses the IME's one-key
+        // delete behavior and clears both committed and composing text.
+        if (fullRange &&
+            [currentDelegate respondsToSelector:@selector(replaceRange:withText:)]) {
+            [currentDelegate replaceRange:fullRange withText:@""];
+            KBRefreshKeyboardState(currentKeyboard);
+            return;
         }
+
+        // Compatibility fallback for input delegates that cannot replace a
+        // range directly: select all, then let the keyboard delete selection.
+        KBSelectAll(currentDelegate);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                     (int64_t)(kSecondActionDelay * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            UIKeyboardImpl *fallbackKeyboard = nil;
+            id fallbackDelegate = KBCurrentInputDelegate(&fallbackKeyboard);
+            if ([fallbackKeyboard respondsToSelector:@selector(deleteFromInput)]) {
+                [fallbackKeyboard deleteFromInput];
+                KBRefreshKeyboardState(fallbackKeyboard);
+            } else if ([fallbackDelegate respondsToSelector:@selector(deleteBackward)]) {
+                [fallbackDelegate deleteBackward];
+            }
+        });
     });
+}
+
+static void KBLayoutToolbarButtons(UIView *container) {
+    // Refresh values written by the Settings process before reading them in
+    // the current application process.
+    CFPreferencesAppSynchronize((__bridge CFStringRef)kPreferencesDomain);
+
+    CGFloat width = CGRectGetWidth(container.bounds);
+    CGFloat height = CGRectGetHeight(container.bounds);
+    if (width <= 0.0 || height <= 0.0) return;
+
+    NSArray<NSString *> *xKeys = KBButtonXPreferenceKeys();
+    NSArray<NSString *> *yKeys = KBButtonYPreferenceKeys();
+    const CGFloat buttonWidth = 64.0;
+    const CGFloat buttonHeight = 44.0;
+
+    for (NSInteger index = 0; index < 4; index++) {
+        UIButton *button = (UIButton *)[container viewWithTag:kButtonTagBase + index];
+        if (!button) continue;
+
+        // Four independent baseline positions spread across the full dock.
+        // Each button then receives only its own X/Y offset from Settings.
+        CGFloat baseX = width * ((CGFloat)index + 0.5) / 4.0;
+        CGFloat baseY = height / 2.0;
+        CGFloat centerX = baseX + KBPreferenceFloat(xKeys[index]);
+        CGFloat centerY = baseY + KBPreferenceFloat(yKeys[index]);
+
+        button.bounds = CGRectMake(0.0, 0.0, buttonWidth, buttonHeight);
+        button.center = CGPointMake(centerX, centerY);
+    }
 }
 
 %hook UIKeyboardDockView
@@ -246,54 +336,54 @@ static void KBClearAllText(void) {
 - (void)layoutSubviews {
     %orig;
 
-    // Dedupe: layoutSubviews fires repeatedly — only build the row once.
-    UIStackView *existing = (UIStackView *)[self viewWithTag:kToolbarTag];
-    if (existing) {
-        [self bringSubviewToFront:existing];
-        return;
+    UIView *container = [self viewWithTag:kToolbarTag];
+    if (!container) {
+        container = [[UIView alloc] initWithFrame:self.bounds];
+        container.tag = kToolbarTag;
+        container.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+                                     UIViewAutoresizingFlexibleHeight;
+        container.backgroundColor = [UIColor clearColor];
+        container.clipsToBounds = NO;
+
+        NSArray *specs = @[
+            @[@"doc.on.clipboard", @"kb_didTapPaste", @"kb_didLongPressPaste:",
+              @"Paste", @"Long press to select all and copy"],
+            @[@"chevron.left", @"kb_didTapLeft", @"kb_didLongPressLeft:",
+              @"Move cursor left", @"Long press to move to the beginning"],
+            @[@"chevron.right", @"kb_didTapRight", @"kb_didLongPressRight:",
+              @"Move cursor right", @"Long press to move to the end"],
+            @[@"keyboard.chevron.compact.down", @"kb_didTapDismiss",
+              @"kb_didLongPressDismiss:", @"Dismiss keyboard",
+              @"Long press to clear all text"],
+        ];
+        for (NSUInteger index = 0; index < specs.count; index++) {
+            NSArray *spec = specs[index];
+            UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+            button.tag = kButtonTagBase + index;
+            [button setImage:[UIImage systemImageNamed:spec[0]]
+                    forState:UIControlStateNormal];
+            button.tintColor = [UIColor labelColor];
+            button.accessibilityLabel = spec[3];
+            button.accessibilityHint = spec[4];
+            [button addTarget:self action:NSSelectorFromString(spec[1])
+               forControlEvents:UIControlEventTouchUpInside];
+
+            UILongPressGestureRecognizer *longPress =
+                [[UILongPressGestureRecognizer alloc]
+                    initWithTarget:self action:NSSelectorFromString(spec[2])];
+            longPress.minimumPressDuration = 0.5;
+            longPress.cancelsTouchesInView = YES;
+            [button addGestureRecognizer:longPress];
+            [container addSubview:button];
+        }
+
+        self.clipsToBounds = NO;
+        [self addSubview:container];
     }
 
-    UIStackView *stack = [[UIStackView alloc] initWithFrame:CGRectZero];
-    stack.tag = kToolbarTag;
-    stack.axis = UILayoutConstraintAxisHorizontal;
-    stack.distribution = UIStackViewDistributionFillEqually;
-    stack.alignment = UIStackViewAlignmentCenter;
-    stack.spacing = 8.0;
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-
-    NSArray *specs = @[
-        @[@"doc.on.clipboard", @"kb_didTapPaste", @"kb_didLongPressPaste:",
-          @"Paste", @"Long press to select all and copy"],
-        @[@"chevron.left", @"kb_didTapLeft", @"kb_didLongPressLeft:",
-          @"Move cursor left", @"Long press to move to the beginning"],
-        @[@"chevron.right", @"kb_didTapRight", @"kb_didLongPressRight:",
-          @"Move cursor right", @"Long press to move to the end"],
-        @[@"keyboard.chevron.compact.down", @"kb_didTapDismiss",
-          @"kb_didLongPressDismiss:", @"Dismiss keyboard",
-          @"Long press to clear all text"],
-    ];
-    for (NSArray *spec in specs) {
-        UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-        [button setImage:[UIImage systemImageNamed:spec[0]]
-                forState:UIControlStateNormal];
-        button.tintColor = [UIColor labelColor];
-        button.accessibilityLabel = spec[3];
-        button.accessibilityHint = spec[4];
-        [button addTarget:self action:NSSelectorFromString(spec[1])
-           forControlEvents:UIControlEventTouchUpInside];
-
-        UILongPressGestureRecognizer *longPress =
-            [[UILongPressGestureRecognizer alloc]
-                initWithTarget:self action:NSSelectorFromString(spec[2])];
-        longPress.minimumPressDuration = 0.5;
-        longPress.cancelsTouchesInView = YES;
-        [button addGestureRecognizer:longPress];
-        [stack addArrangedSubview:button];
-    }
-
-    [self addSubview:stack];
-    [stack.centerXAnchor constraintEqualToAnchor:self.centerXAnchor].active = YES;
-    [stack.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-4.0].active = YES;
+    container.frame = self.bounds;
+    KBLayoutToolbarButtons(container);
+    [self bringSubviewToFront:container];
 }
 
 %new
