@@ -17,6 +17,12 @@
 // lets the compiler resolve UIView methods/properties (viewWithTag:, addSubview:,
 // centerXAnchor, bottomAnchor, ...) on `self` inside the hook.
 @interface UIKeyboardDockView : UIView
+// Our %new methods — declared so the compiler can resolve [self kb_...] calls.
+- (void)kb_haptic;
+- (void)kb_didTapPaste;
+- (void)kb_didTapLeft;
+- (void)kb_didTapRight;
+- (void)kb_didTapDismiss;
 @end
 
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
