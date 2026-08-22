@@ -162,9 +162,21 @@ static void KBCopySelection(void) {
     KBRefreshKeyboardState(keyboard);
 }
 
+static BOOL KBDelegateHasNonWhitespaceText(id delegate) {
+    if (![delegate respondsToSelector:@selector(textInRange:)]) {
+        return YES; // Cannot inspect safely; preserve the existing copy path.
+    }
+    UITextRange *range = KBFullTextRange(delegate);
+    if (!range) return YES;
+    NSString *text = [delegate textInRange:range];
+    if (!text) return YES;
+    return [text stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]].length > 0;
+}
+
 static void KBSelectAllAndCopy(void) {
     id delegate = KBCurrentInputDelegate(NULL);
-    if (!delegate) return;
+    if (!delegate || !KBDelegateHasNonWhitespaceText(delegate)) return;
     KBSelectAll(delegate);
 
     // Some remote input delegates apply selectAll asynchronously. DockX uses
