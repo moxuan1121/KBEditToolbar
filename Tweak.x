@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
+#import <roothide.h>
 
 // ============================================================================
 // KBEditToolbar — keyboard toolbar with 4 buttons:
@@ -61,7 +62,24 @@ static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
 // Third-party app sandboxes cannot reliably read another app-specific domain.
 // Unique, prefixed keys in the global domain are served cross-process by
 // cfprefsd and work in system apps, WeChat, TikTok and other sandboxed apps.
-static NSString *const kPreferencesDomain = @".GlobalPreferences";
+static NSString *const kLegacyPreferencesDomain = @".GlobalPreferences";
+static NSString *const kPreferencesFilename = @"cn.example.kbedittoolbar.preferences.plist";
+static NSDictionary *gPreferences = nil;
+
+static NSString *KBPreferencesPath(void) {
+    return jbroot([@"/var/mobile/Library/Preferences"
+                   stringByAppendingPathComponent:kPreferencesFilename]);
+}
+
+static void KBReloadPreferences(void) {
+    gPreferences = [NSDictionary dictionaryWithContentsOfFile:KBPreferencesPath()] ?: @{};
+}
+
+static void KBPreferencesChanged(CFNotificationCenterRef center, void *observer,
+                                 CFStringRef name, const void *object,
+                                 CFDictionaryRef userInfo) {
+    dispatch_async(dispatch_get_main_queue(), ^{ KBReloadPreferences(); });
+}
 
 static NSArray<NSString *> *KBButtonXPreferenceKeys(void) {
     return @[@"KBETPasteX", @"KBETLeftX", @"KBETRightX", @"KBETDismissX"];
@@ -87,33 +105,20 @@ static NSArray<NSString *> *KBButtonSizePreferenceKeys(void) {
 }
 
 static CGFloat KBPreferenceFloatWithDefault(NSString *key, CGFloat defaultValue) {
-    CFPropertyListRef value = CFPreferencesCopyValue(
-        (__bridge CFStringRef)key,
-        (__bridge CFStringRef)kPreferencesDomain,
-        kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost);
+    id value = gPreferences[key];
     CGFloat result = defaultValue;
-    if (value && (CFGetTypeID(value) == CFNumberGetTypeID() ||
-                  CFGetTypeID(value) == CFBooleanGetTypeID() ||
-                  CFGetTypeID(value) == CFStringGetTypeID())) {
-        result = [(__bridge id)value doubleValue];
+    if ([value respondsToSelector:@selector(doubleValue)]) {
+        result = [value doubleValue];
     }
-    if (value) CFRelease(value);
     return result;
 }
 
 static NSString *KBPreferenceStringWithDefault(NSString *key, NSString *defaultValue) {
-    CFPropertyListRef value = CFPreferencesCopyValue(
-        (__bridge CFStringRef)key,
-        (__bridge CFStringRef)kPreferencesDomain,
-        kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost);
+    id value = gPreferences[key];
     NSString *result = defaultValue;
-    if (value && CFGetTypeID(value) == CFStringGetTypeID() &&
-        [(__bridge NSString *)value length] > 0) {
-        result = [(__bridge NSString *)value copy];
+    if ([value isKindOfClass:[NSString class]] && [value length] > 0) {
+        result = [value copy];
     }
-    if (value) CFRelease(value);
     return result;
 }
 
@@ -147,36 +152,21 @@ static UIColor *KBColorFromHexString(NSString *hex, UIColor *fallback) {
 }
 
 static void KBMigrateLegacyLayoutIfNeeded(void) {
-    CFPropertyListRef versionValue = CFPreferencesCopyValue(
-        CFSTR("KBETLayoutVersion"),
-        (__bridge CFStringRef)kPreferencesDomain,
-        kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost);
-    NSInteger version = 0;
-    if (versionValue && CFGetTypeID(versionValue) == CFNumberGetTypeID()) {
-        version = [(__bridge NSNumber *)versionValue integerValue];
+    if (gPreferences.count > 0) return;
+    CFArrayRef keyList = CFPreferencesCopyKeyList(
+        (__bridge CFStringRef)kLegacyPreferencesDomain,
+        kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    NSMutableDictionary *migrated = [NSMutableDictionary dictionary];
+    for (NSString *key in CFBridgingRelease(keyList) ?: @[]) {
+        if (![key hasPrefix:@"KBET"]) continue;
+        CFPropertyListRef value = CFPreferencesCopyValue(
+            (__bridge CFStringRef)key, (__bridge CFStringRef)kLegacyPreferencesDomain,
+            kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        if (value) migrated[key] = CFBridgingRelease(value);
     }
-    if (versionValue) CFRelease(versionValue);
-    if (version >= 3) return;
-
-    // Earlier releases stored offsets in a private app-specific domain, which
-    // sandboxed apps could not read reliably. Start the global-domain layout
-    // cleanly once after upgrading.
-    for (NSString *key in [KBButtonXPreferenceKeys()
-                           arrayByAddingObjectsFromArray:KBButtonYPreferenceKeys()]) {
-        CFPreferencesSetValue((__bridge CFStringRef)key, NULL,
-                              (__bridge CFStringRef)kPreferencesDomain,
-                              kCFPreferencesCurrentUser,
-                              kCFPreferencesAnyHost);
+    if (migrated.count > 0 && [migrated writeToFile:KBPreferencesPath() atomically:YES]) {
+        gPreferences = [migrated copy];
     }
-    CFPreferencesSetValue(CFSTR("KBETLayoutVersion"),
-                          (__bridge CFPropertyListRef)@3,
-                          (__bridge CFStringRef)kPreferencesDomain,
-                          kCFPreferencesCurrentUser,
-                          kCFPreferencesAnyHost);
-    CFPreferencesSynchronize((__bridge CFStringRef)kPreferencesDomain,
-                             kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
 }
 
 // --- Resolve the text input owned by the active keyboard --------------------
@@ -492,9 +482,7 @@ static BOOL KBFindSystemDockAnchors(UIView *dock,
 static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     // Refresh values written by the Settings process before reading them in
     // the current application process.
-    CFPreferencesSynchronize((__bridge CFStringRef)kPreferencesDomain,
-                             kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
+    if (!gPreferences) KBReloadPreferences();
     KBMigrateLegacyLayoutIfNeeded();
 
     CGFloat width = CGRectGetWidth(dock.bounds);
@@ -724,3 +712,15 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
 }
 
 %end
+
+%ctor {
+    @autoreleasepool {
+        KBReloadPreferences();
+        KBMigrateLegacyLayoutIfNeeded();
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(), NULL,
+            KBPreferencesChanged,
+            CFSTR("cn.example.kbedittoolbar/preferencesChanged"),
+            NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+    }
+}

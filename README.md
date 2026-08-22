@@ -65,6 +65,13 @@ X 负值向左、正值向右；Y 负值向上、正值向下。图标大小和 
 
 - 修复开关型偏好值未识别 `CFBoolean`，导致布局辅助线和按压区域阴影始终保持关闭的问题，同时修复“跟随地球键颜色”开关无法关闭。
 
+## 0.8.0 更新
+
+- 配置迁移到 RootHide 独立文件 `/var/mobile/Library/Preferences/cn.example.kbedittoolbar.preferences.plist`，不再长期占用系统 `.GlobalPreferences.plist`。
+- 首次升级自动复制旧 `KBET…` 设置；独立文件成功建立后，只删除全局偏好中的本插件键，不影响其他系统或插件配置。
+- 配置改为启动时读取、Darwin 通知到达时刷新，布局阶段只访问内存缓存，避免每次布局反复读取磁盘。
+- 启用 `-Os`、函数/数据分段和链接器死代码裁剪，降低动态库与 SpringBoard/键盘进程额外占用。
+
 ## 粘贴修复
 
 旧实现从键盘 Dock 调用 `sendAction:@selector(paste:) to:nil`，部分系统版本和 App 中无法通过响应链找到真正的输入对象。现在参考 [DockX](https://github.com/udevsharold/dockx) 的实现：

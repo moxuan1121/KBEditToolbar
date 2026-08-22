@@ -7,7 +7,8 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = KBEditToolbar
 
 KBEditToolbar_FILES = Tweak.x
-KBEditToolbar_CFLAGS = -fobjc-arc
+KBEditToolbar_CFLAGS = -fobjc-arc -Os -ffunction-sections -fdata-sections
+KBEditToolbar_LDFLAGS = -Wl,-dead_strip
 KBEditToolbar_FRAMEWORKS = UIKit Foundation CoreFoundation
 
 include $(THEOS_MAKE_PATH)/tweak.mk

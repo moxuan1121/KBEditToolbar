@@ -2,9 +2,59 @@
 #import <Preferences/PSSpecifier.h>
 #import <CoreFoundation/CoreFoundation.h>
 #import <math.h>
+#import <roothide.h>
 
-static NSString *const kKBETPreferencesDomain = @".GlobalPreferences";
+static NSString *const kKBETLegacyPreferencesDomain = @".GlobalPreferences";
+static NSString *const kKBETPreferencesFilename = @"cn.example.kbedittoolbar.preferences.plist";
 static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/preferencesChanged";
+
+static NSString *KBETPreferencesPath(void) {
+    return jbroot([@"/var/mobile/Library/Preferences"
+                   stringByAppendingPathComponent:kKBETPreferencesFilename]);
+}
+
+static NSArray<NSString *> *KBETPreferenceKeys(void) {
+    return @[
+        @"KBETPasteX", @"KBETPasteY", @"KBETLeftX", @"KBETLeftY",
+        @"KBETRightX", @"KBETRightY", @"KBETDismissX", @"KBETDismissY",
+        @"KBETPasteSymbol", @"KBETLeftSymbol", @"KBETRightSymbol", @"KBETDismissSymbol",
+        @"KBETPasteIconPointSize", @"KBETLeftIconPointSize",
+        @"KBETRightIconPointSize", @"KBETDismissIconPointSize",
+        @"KBETLongPressDurationMS", @"KBETFollowSystemTint", @"KBETCustomTintHex",
+        @"KBETTouchWidth", @"KBETTouchHeight", @"KBETShowTouchShadow",
+        @"KBETShowLayoutGuides", @"KBETLayoutVersion", @"KBETIconPointSize"
+    ];
+}
+
+static NSMutableDictionary *KBETLoadPreferences(void) {
+    NSDictionary *stored = [NSDictionary dictionaryWithContentsOfFile:KBETPreferencesPath()];
+    return stored ? [stored mutableCopy] : [NSMutableDictionary dictionary];
+}
+
+static BOOL KBETWritePreferences(NSDictionary *preferences) {
+    return [preferences writeToFile:KBETPreferencesPath() atomically:YES];
+}
+
+static void KBETMigrateGlobalPreferencesIfNeeded(void) {
+    BOOL hasIndependentFile =
+        [[NSFileManager defaultManager] fileExistsAtPath:KBETPreferencesPath()];
+    NSMutableDictionary *migrated = [NSMutableDictionary dictionary];
+    for (NSString *key in KBETPreferenceKeys()) {
+        CFPropertyListRef value = CFPreferencesCopyValue(
+            (__bridge CFStringRef)key, (__bridge CFStringRef)kKBETLegacyPreferencesDomain,
+            kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        if (value) migrated[key] = CFBridgingRelease(value);
+    }
+    if (migrated.count == 0) return;
+    if (!hasIndependentFile && !KBETWritePreferences(migrated)) return;
+    for (NSString *key in migrated) {
+        CFPreferencesSetValue((__bridge CFStringRef)key, NULL,
+                              (__bridge CFStringRef)kKBETLegacyPreferencesDomain,
+                              kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    }
+    CFPreferencesSynchronize((__bridge CFStringRef)kKBETLegacyPreferencesDomain,
+                             kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+}
 
 @interface KBETRootListController : PSListController <UIColorPickerViewControllerDelegate>
 @end
@@ -13,6 +63,7 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
 
 - (NSArray *)specifiers {
     if (!_specifiers) {
+        KBETMigrateGlobalPreferencesIfNeeded();
         _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
     }
     return _specifiers;
@@ -22,12 +73,8 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
     NSString *key = [specifier propertyForKey:@"key"];
     if (!key) return [specifier propertyForKey:@"default"];
 
-    CFPropertyListRef value = CFPreferencesCopyValue(
-        (__bridge CFStringRef)key,
-        (__bridge CFStringRef)kKBETPreferencesDomain,
-        kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost);
-    return value ? CFBridgingRelease(value) : [specifier propertyForKey:@"default"];
+    id value = KBETLoadPreferences()[key];
+    return value ?: [specifier propertyForKey:@"default"];
 }
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
@@ -41,20 +88,11 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
             double rounded = round([value doubleValue] * 10.0) / 10.0;
             value = [NSString stringWithFormat:@"%.1f", rounded];
         }
-        CFPreferencesSetValue((__bridge CFStringRef)key,
-                              (__bridge CFPropertyListRef)value,
-                              (__bridge CFStringRef)kKBETPreferencesDomain,
-                              kCFPreferencesCurrentUser,
-                              kCFPreferencesAnyHost);
+        NSMutableDictionary *preferences = KBETLoadPreferences();
+        preferences[key] = value;
+        preferences[@"KBETLayoutVersion"] = @4;
+        KBETWritePreferences(preferences);
     }
-    CFPreferencesSetValue(CFSTR("KBETLayoutVersion"),
-                          (__bridge CFPropertyListRef)@3,
-                          (__bridge CFStringRef)kKBETPreferencesDomain,
-                          kCFPreferencesCurrentUser,
-                          kCFPreferencesAnyHost);
-    CFPreferencesSynchronize((__bridge CFStringRef)kKBETPreferencesDomain,
-                             kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                          (__bridge CFStringRef)kKBETPreferencesChanged,
                                          NULL, NULL, YES);
@@ -87,34 +125,7 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
 }
 
 - (void)resetLayout {
-    NSArray<NSString *> *keys = @[
-        @"KBETPasteX", @"KBETPasteY",
-        @"KBETLeftX", @"KBETLeftY",
-        @"KBETRightX", @"KBETRightY",
-        @"KBETDismissX", @"KBETDismissY",
-        @"KBETPasteSymbol", @"KBETLeftSymbol",
-        @"KBETRightSymbol", @"KBETDismissSymbol",
-        @"KBETPasteIconPointSize", @"KBETLeftIconPointSize",
-        @"KBETRightIconPointSize", @"KBETDismissIconPointSize",
-        @"KBETLongPressDurationMS",
-        @"KBETFollowSystemTint", @"KBETCustomTintHex",
-        @"KBETTouchWidth", @"KBETTouchHeight",
-        @"KBETShowTouchShadow", @"KBETShowLayoutGuides",
-    ];
-    for (NSString *key in keys) {
-        CFPreferencesSetValue((__bridge CFStringRef)key, NULL,
-                              (__bridge CFStringRef)kKBETPreferencesDomain,
-                              kCFPreferencesCurrentUser,
-                              kCFPreferencesAnyHost);
-    }
-    CFPreferencesSetValue(CFSTR("KBETLayoutVersion"),
-                          (__bridge CFPropertyListRef)@3,
-                          (__bridge CFStringRef)kKBETPreferencesDomain,
-                          kCFPreferencesCurrentUser,
-                          kCFPreferencesAnyHost);
-    CFPreferencesSynchronize((__bridge CFStringRef)kKBETPreferencesDomain,
-                             kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
+    KBETWritePreferences(@{@"KBETLayoutVersion": @4});
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                          (__bridge CFStringRef)kKBETPreferencesChanged,
                                          NULL, NULL, YES);
