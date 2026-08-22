@@ -41,8 +41,18 @@ jobs:
 
       - name: Ensure iOS SDK present
         run: |
-          ls "$THEOS/sdks"/*.sdk >/dev/null 2>&1 || \
-            git clone --depth=1 https://github.com/theos/sdks.git "$THEOS/sdks"
+          export THEOS=$HOME/theos
+          if ! ls "$THEOS"/sdks/iPhoneOS*.sdk >/dev/null 2>&1; then
+            echo "No iPhoneOS SDK in theos; fetching into a temp dir and copying in…"
+            rm -rf /tmp/theos-sdks
+            git clone --depth=1 https://github.com/theos/sdks.git /tmp/theos-sdks
+            mkdir -p "$THEOS/sdks"
+            # copy into the existing (non-empty) sdks dir to avoid clone conflicts
+            cp -R /tmp/theos-sdks/iPhoneOS*.sdk "$THEOS/sdks"/ 2>/dev/null || \
+              cp -R /tmp/theos-sdks/*.sdk "$THEOS/sdks"/ 2>/dev/null || true
+          fi
+          echo "=== SDKs available ==="
+          ls -d "$THEOS"/sdks/*.sdk 2>/dev/null || { echo "STILL NO SDK"; exit 1; }
 
       - name: Build (FINALPACKAGE, ${{ matrix.scheme }})
         run: |
