@@ -440,6 +440,11 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     %orig;
 
     UIView *container = [self viewWithTag:kToolbarTag];
+    UIInterfaceOrientation orientation = self.window.windowScene.interfaceOrientation;
+    BOOL isLandscape = UIInterfaceOrientationIsLandscape(orientation);
+    container.hidden = isLandscape;
+    if (isLandscape) return;
+
     if (!container) {
         container = [[KBPassthroughView alloc] initWithFrame:self.bounds];
         container.tag = kToolbarTag;
@@ -483,6 +488,8 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
         self.clipsToBounds = NO;
         [self addSubview:container];
     }
+
+    container.hidden = NO;
 
     container.frame = self.bounds;
     KBLayoutToolbarButtons(self, container);
