@@ -1,8 +1,8 @@
 Package: cn.example.kbedittoolbar
 Name: Keyboard Edit Toolbar (学习版)
-Version: 0.1.0
+Version: 0.2.0
 Architecture: iphoneos-arm64
-Description: Keyboard toolbar: paste / cursor-left / cursor-right / dismiss. Study project.
+Description: Keyboard toolbar with editing shortcuts and long-press actions.
 Maintainer: you
 Author: you
 Section: Tweaks

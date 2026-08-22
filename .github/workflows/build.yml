@@ -1,30 +1,15 @@
-name: Build tweak (rootless + roothide)
-
-# Builds the tweak into installable .deb packages on a macOS runner.
-# Two variants via a matrix:
-#   - rootless : standard theos (theos/theos)   -> for rootless jailbreaks
-#   - roothide : roothide theos (roothide/theos) -> for Dopamine RootHide
-# No local WSL/Theos needed — push to GitHub, then download the .deb from
-# the run's Artifacts (or from the auto-created Release on a tag).
+name: Build tweak (roothide)
 
 on:
   push:
     branches: [ main, master ]
     tags: [ 'v*' ]
-  workflow_dispatch:      # lets you run it manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: macos-14     # Xcode 15.x, arm64e-capable toolchain
-    strategy:
-      fail-fast: false     # one variant failing must not cancel the other
-      matrix:
-        include:
-          - scheme: rootless
-            theos_repo: https://github.com/theos/theos.git
-          - scheme: roothide
-            theos_repo: https://github.com/roothide/theos.git
-    name: build-${{ matrix.scheme }}
+  build-roothide:
+    runs-on: macos-14
+    name: build-roothide
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,43 +19,38 @@ jobs:
 
       - name: Install ldid (dylib signer)
         run: |
-          # theos needs ldid to sign the built dylib; the manual clone below
-          # (unlike install-theos) does not pull it in, so install it here.
           brew install ldid || brew install ldid-procursus || true
           command -v ldid || { echo "ldid still missing"; exit 1; }
 
-      - name: Install Theos (${{ matrix.scheme }})
+      - name: Install Theos (roothide)
         run: |
           export THEOS=$HOME/theos
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
-          # Recursive clone of the matching theos fork (submodules incl. lib/headers).
-          git clone --recursive "${{ matrix.theos_repo }}" "$THEOS"
+          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
 
       - name: Ensure iOS SDK present
         run: |
           export THEOS=$HOME/theos
           if ! ls "$THEOS"/sdks/iPhoneOS*.sdk >/dev/null 2>&1; then
-            echo "No iPhoneOS SDK in theos; fetching into a temp dir and copying in…"
+            echo "No iPhoneOS SDK in theos; fetching it now…"
             rm -rf /tmp/theos-sdks
             git clone --depth=1 https://github.com/theos/sdks.git /tmp/theos-sdks
             mkdir -p "$THEOS/sdks"
-            # copy into the existing (non-empty) sdks dir to avoid clone conflicts
             cp -R /tmp/theos-sdks/iPhoneOS*.sdk "$THEOS/sdks"/ 2>/dev/null || \
               cp -R /tmp/theos-sdks/*.sdk "$THEOS/sdks"/ 2>/dev/null || true
           fi
-          echo "=== SDKs available ==="
-          ls -d "$THEOS"/sdks/*.sdk 2>/dev/null || { echo "STILL NO SDK"; exit 1; }
+          ls -d "$THEOS"/sdks/*.sdk 2>/dev/null || { echo "NO SDK"; exit 1; }
 
-      - name: Build (FINALPACKAGE, ${{ matrix.scheme }})
+      - name: Build roothide package
         run: |
           export THEOS=$HOME/theos
           make clean || true
-          make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=${{ matrix.scheme }} package
+          make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=roothide package
 
-      - name: Upload .deb artifact
+      - name: Upload roothide .deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KBEditToolbar-${{ matrix.scheme }}-deb
+          name: KBEditToolbar-roothide-deb
           path: packages/*.deb
           if-no-files-found: error
 
