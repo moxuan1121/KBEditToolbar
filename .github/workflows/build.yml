@@ -32,6 +32,13 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_15.4.app || true
 
+      - name: Install ldid (dylib signer)
+        run: |
+          # theos needs ldid to sign the built dylib; the manual clone below
+          # (unlike install-theos) does not pull it in, so install it here.
+          brew install ldid || brew install ldid-procursus || true
+          command -v ldid || { echo "ldid still missing"; exit 1; }
+
       - name: Install Theos (${{ matrix.scheme }})
         run: |
           export THEOS=$HOME/theos
