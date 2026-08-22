@@ -1,8 +1,8 @@
 Package: cn.example.kbedittoolbar
 Name: Keyboard Edit Toolbar (学习版)
-Version: 0.3.0
+Version: 0.4.0
 Architecture: iphoneos-arm64
-Description: Keyboard toolbar with composing-text clearing and per-button X/Y layout settings.
+Description: Keyboard toolbar with pass-through system controls and six-position dock layout.
 Maintainer: you
 Author: you
 Section: Tweaks

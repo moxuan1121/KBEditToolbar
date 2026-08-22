@@ -10,7 +10,7 @@
             <key>label</key>
             <string>独立布局调整</string>
             <key>footerText</key>
-            <string>每个按钮的 X、Y 坐标独立保存，调节一个按钮不会移动其他按钮。X 负值向左、正值向右；Y 负值向上、正值向下。返回使用键盘的 App 后生效。</string>
+            <string>默认以地球和麦克风为两端，把四个工具按钮插入中间，六个按钮整体等距。每个工具按钮的 X、Y 偏移独立保存；X 负值向左、正值向右，Y 负值向上、正值向下。返回使用键盘的 App 后生效。</string>
         </dict>
 
         <dict>
@@ -25,11 +25,11 @@
             <key>defaults</key><string>cn.example.kbedittoolbar.preferences</string>
             <key>key</key><string>pasteX</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-180</real>
-            <key>max</key><real>180</real>
+            <key>min</key><real>-500</real>
+            <key>max</key><real>500</real>
             <key>showValue</key><true/>
             <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>72</integer>
+            <key>segmentCount</key><integer>200</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
         <dict>
@@ -38,11 +38,11 @@
             <key>defaults</key><string>cn.example.kbedittoolbar.preferences</string>
             <key>key</key><string>pasteY</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-60</real>
-            <key>max</key><real>60</real>
+            <key>min</key><real>-400</real>
+            <key>max</key><real>400</real>
             <key>showValue</key><true/>
             <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>48</integer>
+            <key>segmentCount</key><integer>160</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -58,11 +58,11 @@
             <key>defaults</key><string>cn.example.kbedittoolbar.preferences</string>
             <key>key</key><string>leftX</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-180</real>
-            <key>max</key><real>180</real>
+            <key>min</key><real>-500</real>
+            <key>max</key><real>500</real>
             <key>showValue</key><true/>
             <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>72</integer>
+            <key>segmentCount</key><integer>200</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
         <dict>
@@ -71,11 +71,11 @@
             <key>defaults</key><string>cn.example.kbedittoolbar.preferences</string>
             <key>key</key><string>leftY</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-60</real>
-            <key>max</key><real>60</real>
+            <key>min</key><real>-400</real>
+            <key>max</key><real>400</real>
             <key>showValue</key><true/>
             <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>48</integer>
+            <key>segmentCount</key><integer>160</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -91,11 +91,11 @@
             <key>defaults</key><string>cn.example.kbedittoolbar.preferences</string>
             <key>key</key><string>rightX</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-180</real>
-            <key>max</key><real>180</real>
+            <key>min</key><real>-500</real>
+            <key>max</key><real>500</real>
             <key>showValue</key><true/>
             <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>72</integer>
+            <key>segmentCount</key><integer>200</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
         <dict>
@@ -104,11 +104,11 @@
             <key>defaults</key><string>cn.example.kbedittoolbar.preferences</string>
             <key>key</key><string>rightY</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-60</real>
-            <key>max</key><real>60</real>
+            <key>min</key><real>-400</real>
+            <key>max</key><real>400</real>
             <key>showValue</key><true/>
             <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>48</integer>
+            <key>segmentCount</key><integer>160</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -124,11 +124,11 @@
             <key>defaults</key><string>cn.example.kbedittoolbar.preferences</string>
             <key>key</key><string>dismissX</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-180</real>
-            <key>max</key><real>180</real>
+            <key>min</key><real>-500</real>
+            <key>max</key><real>500</real>
             <key>showValue</key><true/>
             <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>72</integer>
+            <key>segmentCount</key><integer>200</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
         <dict>
@@ -137,11 +137,11 @@
             <key>defaults</key><string>cn.example.kbedittoolbar.preferences</string>
             <key>key</key><string>dismissY</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-60</real>
-            <key>max</key><real>60</real>
+            <key>min</key><real>-400</real>
+            <key>max</key><real>400</real>
             <key>showValue</key><true/>
             <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>48</integer>
+            <key>segmentCount</key><integer>160</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -149,7 +149,7 @@
             <key>cell</key>
             <string>PSGroupCell</string>
             <key>footerText</key>
-            <string>恢复默认会把四个按钮重新均匀铺开在键盘底部。</string>
+            <string>恢复默认会清除所有独立偏移，并把四个工具按钮放回地球和麦克风之间的六等距布局。</string>
         </dict>
         <dict>
             <key>cell</key>

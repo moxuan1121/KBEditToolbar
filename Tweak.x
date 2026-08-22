@@ -41,6 +41,18 @@
 - (void)kb_didLongPressDismiss:(UILongPressGestureRecognizer *)recognizer;
 @end
 
+// The container occupies the dock so it can position buttons independently,
+// but its transparent area must not intercept the system globe/microphone.
+@interface KBPassthroughView : UIView
+@end
+
+@implementation KBPassthroughView
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hitView = [super hitTest:point withEvent:event];
+    return hitView == self ? nil : hitView;
+}
+@end
+
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
 static const NSInteger kButtonTagBase = 0x4B60;
 static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
@@ -63,6 +75,29 @@ static CGFloat KBPreferenceFloat(NSString *key) {
     }
     if (value) CFRelease(value);
     return result;
+}
+
+static void KBMigrateLegacyLayoutIfNeeded(void) {
+    CFPropertyListRef versionValue = CFPreferencesCopyAppValue(
+        CFSTR("layoutVersion"), (__bridge CFStringRef)kPreferencesDomain);
+    NSInteger version = 0;
+    if (versionValue && CFGetTypeID(versionValue) == CFNumberGetTypeID()) {
+        version = [(__bridge NSNumber *)versionValue integerValue];
+    }
+    if (versionValue) CFRelease(versionValue);
+    if (version >= 2) return;
+
+    // 0.3.x measured Y from the middle of the whole keyboard view. Its saved
+    // offsets are incompatible with the new system-dock anchor, so start the
+    // six-position layout cleanly once after upgrading.
+    for (NSString *key in [KBButtonXPreferenceKeys()
+                           arrayByAddingObjectsFromArray:KBButtonYPreferenceKeys()]) {
+        CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL,
+                                 (__bridge CFStringRef)kPreferencesDomain);
+    }
+    CFPreferencesSetAppValue(CFSTR("layoutVersion"), (__bridge CFNumberRef)@2,
+                             (__bridge CFStringRef)kPreferencesDomain);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)kPreferencesDomain);
 }
 
 // --- Resolve the text input owned by the active keyboard --------------------
@@ -301,28 +336,99 @@ static void KBClearAllText(void) {
     });
 }
 
-static void KBLayoutToolbarButtons(UIView *container) {
+static void KBCollectSystemControls(UIView *view,
+                                    UIView *excludedView,
+                                    NSMutableArray<UIControl *> *controls) {
+    for (UIView *subview in view.subviews) {
+        if (subview == excludedView || subview.hidden || subview.alpha < 0.01) {
+            continue;
+        }
+        if ([subview isKindOfClass:[UIControl class]]) {
+            [controls addObject:(UIControl *)subview];
+        }
+        KBCollectSystemControls(subview, excludedView, controls);
+    }
+}
+
+static BOOL KBFindSystemDockAnchors(UIView *dock,
+                                    UIView *container,
+                                    CGPoint *leftAnchor,
+                                    CGPoint *rightAnchor) {
+    CGFloat width = CGRectGetWidth(dock.bounds);
+    CGFloat height = CGRectGetHeight(dock.bounds);
+    if (width <= 0.0 || height <= 0.0) return NO;
+
+    NSMutableArray<UIControl *> *controls = [NSMutableArray array];
+    KBCollectSystemControls(dock, container, controls);
+
+    BOOL foundLeft = NO;
+    BOOL foundRight = NO;
+    CGPoint bestLeft = CGPointZero;
+    CGPoint bestRight = CGPointZero;
+    CGFloat bottomBandTop = height - MIN(80.0, height * 0.28);
+
+    for (UIControl *control in controls) {
+        CGRect rect = [control convertRect:control.bounds toView:dock];
+        CGFloat controlWidth = CGRectGetWidth(rect);
+        CGFloat controlHeight = CGRectGetHeight(rect);
+        CGPoint center = CGPointMake(CGRectGetMidX(rect), CGRectGetMidY(rect));
+
+        // System globe/dictation controls are compact, live in the bottom band,
+        // and sit in the outer quarters. Keyboard character keys are excluded.
+        if (controlWidth < 10.0 || controlHeight < 10.0 ||
+            controlWidth > 110.0 || controlHeight > 110.0 ||
+            center.y < bottomBandTop) {
+            continue;
+        }
+
+        if (center.x < width * 0.28 &&
+            (!foundLeft || center.y > bestLeft.y)) {
+            bestLeft = center;
+            foundLeft = YES;
+        }
+        if (center.x > width * 0.72 &&
+            (!foundRight || center.y > bestRight.y)) {
+            bestRight = center;
+            foundRight = YES;
+        }
+    }
+
+    if (!foundLeft || !foundRight || bestRight.x <= bestLeft.x) return NO;
+    if (leftAnchor) *leftAnchor = bestLeft;
+    if (rightAnchor) *rightAnchor = bestRight;
+    return YES;
+}
+
+static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     // Refresh values written by the Settings process before reading them in
     // the current application process.
     CFPreferencesAppSynchronize((__bridge CFStringRef)kPreferencesDomain);
+    KBMigrateLegacyLayoutIfNeeded();
 
-    CGFloat width = CGRectGetWidth(container.bounds);
-    CGFloat height = CGRectGetHeight(container.bounds);
+    CGFloat width = CGRectGetWidth(dock.bounds);
+    CGFloat height = CGRectGetHeight(dock.bounds);
     if (width <= 0.0 || height <= 0.0) return;
 
     NSArray<NSString *> *xKeys = KBButtonXPreferenceKeys();
     NSArray<NSString *> *yKeys = KBButtonYPreferenceKeys();
-    const CGFloat buttonWidth = 64.0;
+    const CGFloat buttonWidth = 60.0;
     const CGFloat buttonHeight = 44.0;
+
+    // Use the real system globe/microphone centers when they can be found.
+    // The fallback matches a six-column dock and places the row near the bottom.
+    CGPoint leftAnchor = CGPointMake(width / 12.0, height - 30.0);
+    CGPoint rightAnchor = CGPointMake(width * 11.0 / 12.0, height - 30.0);
+    KBFindSystemDockAnchors(dock, container, &leftAnchor, &rightAnchor);
 
     for (NSInteger index = 0; index < 4; index++) {
         UIButton *button = (UIButton *)[container viewWithTag:kButtonTagBase + index];
         if (!button) continue;
 
-        // Four independent baseline positions spread across the full dock.
-        // Each button then receives only its own X/Y offset from Settings.
-        CGFloat baseX = width * ((CGFloat)index + 0.5) / 4.0;
-        CGFloat baseY = height / 2.0;
+        // Interpolate four positions between the system controls. Together the
+        // globe, four custom buttons and microphone form six equal intervals.
+        CGFloat progress = ((CGFloat)index + 1.0) / 5.0;
+        CGFloat baseX = leftAnchor.x + (rightAnchor.x - leftAnchor.x) * progress;
+        CGFloat baseY = leftAnchor.y + (rightAnchor.y - leftAnchor.y) * progress;
         CGFloat centerX = baseX + KBPreferenceFloat(xKeys[index]);
         CGFloat centerY = baseY + KBPreferenceFloat(yKeys[index]);
 
@@ -338,7 +444,7 @@ static void KBLayoutToolbarButtons(UIView *container) {
 
     UIView *container = [self viewWithTag:kToolbarTag];
     if (!container) {
-        container = [[UIView alloc] initWithFrame:self.bounds];
+        container = [[KBPassthroughView alloc] initWithFrame:self.bounds];
         container.tag = kToolbarTag;
         container.autoresizingMask = UIViewAutoresizingFlexibleWidth |
                                      UIViewAutoresizingFlexibleHeight;
@@ -382,7 +488,7 @@ static void KBLayoutToolbarButtons(UIView *container) {
     }
 
     container.frame = self.bounds;
-    KBLayoutToolbarButtons(container);
+    KBLayoutToolbarButtons(self, container);
     [self bringSubviewToFront:container];
 }
 

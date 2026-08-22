@@ -17,6 +17,17 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
     return _specifiers;
 }
 
+- (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
+    [super setPreferenceValue:value specifier:specifier];
+    CFPreferencesSetAppValue(CFSTR("layoutVersion"),
+                             (__bridge CFPropertyListRef)@2,
+                             (__bridge CFStringRef)kKBETPreferencesDomain);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)kKBETPreferencesDomain);
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                                         (__bridge CFStringRef)kKBETPreferencesChanged,
+                                         NULL, NULL, YES);
+}
+
 - (void)resetLayout {
     NSArray<NSString *> *keys = @[
         @"pasteX", @"pasteY",
@@ -28,6 +39,9 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
         CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL,
                                  (__bridge CFStringRef)kKBETPreferencesDomain);
     }
+    CFPreferencesSetAppValue(CFSTR("layoutVersion"),
+                             (__bridge CFPropertyListRef)@2,
+                             (__bridge CFStringRef)kKBETPreferencesDomain);
     CFPreferencesAppSynchronize((__bridge CFStringRef)kKBETPreferencesDomain);
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                          (__bridge CFStringRef)kKBETPreferencesChanged,
