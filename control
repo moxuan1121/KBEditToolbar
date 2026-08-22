@@ -1,8 +1,8 @@
 Package: cn.example.kbedittoolbar
 Name: Keyboard Edit Toolbar (学习版)
-Version: 0.4.0
+Version: 0.5.0
 Architecture: iphoneos-arm64
-Description: Keyboard toolbar with pass-through system controls and six-position dock layout.
+Description: Keyboard toolbar with cross-app per-button layout, adjustable SF Symbol size and robust IME clearing.
 Maintainer: you
 Author: you
 Section: Tweaks

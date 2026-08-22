@@ -2,7 +2,7 @@
 #import <Preferences/PSSpecifier.h>
 #import <CoreFoundation/CoreFoundation.h>
 
-static NSString *const kKBETPreferencesDomain = @"cn.example.kbedittoolbar.preferences";
+static NSString *const kKBETPreferencesDomain = @".GlobalPreferences";
 static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/preferencesChanged";
 
 @interface KBETRootListController : PSListController
@@ -17,12 +17,35 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
     return _specifiers;
 }
 
+- (id)readPreferenceValue:(PSSpecifier *)specifier {
+    NSString *key = [specifier propertyForKey:@"key"];
+    if (!key) return [specifier propertyForKey:@"default"];
+
+    CFPropertyListRef value = CFPreferencesCopyValue(
+        (__bridge CFStringRef)key,
+        (__bridge CFStringRef)kKBETPreferencesDomain,
+        kCFPreferencesCurrentUser,
+        kCFPreferencesAnyHost);
+    return value ? CFBridgingRelease(value) : [specifier propertyForKey:@"default"];
+}
+
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
-    [super setPreferenceValue:value specifier:specifier];
-    CFPreferencesSetAppValue(CFSTR("layoutVersion"),
-                             (__bridge CFPropertyListRef)@2,
-                             (__bridge CFStringRef)kKBETPreferencesDomain);
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kKBETPreferencesDomain);
+    NSString *key = [specifier propertyForKey:@"key"];
+    if (key) {
+        CFPreferencesSetValue((__bridge CFStringRef)key,
+                              (__bridge CFPropertyListRef)value,
+                              (__bridge CFStringRef)kKBETPreferencesDomain,
+                              kCFPreferencesCurrentUser,
+                              kCFPreferencesAnyHost);
+    }
+    CFPreferencesSetValue(CFSTR("KBETLayoutVersion"),
+                          (__bridge CFPropertyListRef)@3,
+                          (__bridge CFStringRef)kKBETPreferencesDomain,
+                          kCFPreferencesCurrentUser,
+                          kCFPreferencesAnyHost);
+    CFPreferencesSynchronize((__bridge CFStringRef)kKBETPreferencesDomain,
+                             kCFPreferencesCurrentUser,
+                             kCFPreferencesAnyHost);
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                          (__bridge CFStringRef)kKBETPreferencesChanged,
                                          NULL, NULL, YES);
@@ -30,19 +53,26 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
 
 - (void)resetLayout {
     NSArray<NSString *> *keys = @[
-        @"pasteX", @"pasteY",
-        @"leftX", @"leftY",
-        @"rightX", @"rightY",
-        @"dismissX", @"dismissY",
+        @"KBETPasteX", @"KBETPasteY",
+        @"KBETLeftX", @"KBETLeftY",
+        @"KBETRightX", @"KBETRightY",
+        @"KBETDismissX", @"KBETDismissY",
+        @"KBETIconPointSize",
     ];
     for (NSString *key in keys) {
-        CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL,
-                                 (__bridge CFStringRef)kKBETPreferencesDomain);
+        CFPreferencesSetValue((__bridge CFStringRef)key, NULL,
+                              (__bridge CFStringRef)kKBETPreferencesDomain,
+                              kCFPreferencesCurrentUser,
+                              kCFPreferencesAnyHost);
     }
-    CFPreferencesSetAppValue(CFSTR("layoutVersion"),
-                             (__bridge CFPropertyListRef)@2,
-                             (__bridge CFStringRef)kKBETPreferencesDomain);
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kKBETPreferencesDomain);
+    CFPreferencesSetValue(CFSTR("KBETLayoutVersion"),
+                          (__bridge CFPropertyListRef)@3,
+                          (__bridge CFStringRef)kKBETPreferencesDomain,
+                          kCFPreferencesCurrentUser,
+                          kCFPreferencesAnyHost);
+    CFPreferencesSynchronize((__bridge CFStringRef)kKBETPreferencesDomain,
+                             kCFPreferencesCurrentUser,
+                             kCFPreferencesAnyHost);
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                          (__bridge CFStringRef)kKBETPreferencesChanged,
                                          NULL, NULL, YES);

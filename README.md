@@ -26,10 +26,11 @@
 
 安装 PreferenceLoader 后，打开系统 **设置 → 键盘编辑工具条**。四个按钮各有独立的 X、Y 滑块，共 8 项：
 
-- 粘贴按钮：`pasteX`、`pasteY`
-- 向左按钮：`leftX`、`leftY`
-- 向右按钮：`rightX`、`rightY`
-- 收起键盘按钮：`dismissX`、`dismissY`
+- 粘贴按钮：`KBETPasteX`、`KBETPasteY`
+- 向左按钮：`KBETLeftX`、`KBETLeftY`
+- 向右按钮：`KBETRightX`、`KBETRightY`
+- 收起键盘按钮：`KBETDismissX`、`KBETDismissY`
+- 全局图标大小：`KBETIconPointSize`（12～44 pt，默认 22 pt）
 
 X 负值向左、正值向右；Y 负值向上、正值向下。每个值只作用于对应按钮，不会一起移动。设置页底部提供“恢复默认布局”。
 
@@ -40,6 +41,13 @@ X 负值向左、正值向右；Y 负值向上、正值向下。每个值只作�
 这六个中心点采用相同间距，能够适配 iPhone 13 Pro Max 等不同宽度的设备。若系统控件暂时无法识别，则退回等价的六列比例位置。工具条的透明容器只接收四个工具按钮自身的触摸，其他区域会把点击传递给下层，因此不会再遮挡地球键和语音输入键。
 
 0.3.x 的 Y 偏移是从整个键盘中线计算的，与 0.4.0 的底栏坐标不兼容；首次运行 0.4.0 会自动清除旧偏移并切换到新的六等距默认布局。新的调节范围为 X `-500～500`、Y `-400～400`，足以覆盖 iPhone 13 Pro Max 的键盘区域。
+
+## 0.5.0 更新
+
+- 四个图标依次使用 `arrow.up.doc.on.clipboard`、`arrow.left.circle`、`arrow.right.circle`、`keyboard.chevron.compact.down`。
+- 设置中可统一调整四个工具图标的显示大小，按钮触控区域保持不变。
+- 布局偏移迁移到带 `KBET` 前缀的全局偏好键，修复设置 App 生效但微信、抖音仍保持默认高度的问题。
+- 长按收起键盘会同时清除输入框内容、输入法内部拼音组合和候选缓存，避免下一次输入时旧内容重新出现。
 
 ## 粘贴修复
 

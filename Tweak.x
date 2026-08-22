@@ -20,6 +20,7 @@
 @property (nonatomic, readonly, assign) id inputDelegate;
 - (void)insertText:(id)text;
 - (void)deleteFromInput;
+- (void)clearInputWithCandidatesCleared:(BOOL)candidatesCleared;
 - (void)clearTransientState;
 - (void)clearAnimations;
 - (void)setCaretBlinks:(BOOL)blinks;
@@ -56,20 +57,31 @@
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
 static const NSInteger kButtonTagBase = 0x4B60;
 static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
-static NSString *const kPreferencesDomain = @"cn.example.kbedittoolbar.preferences";
+// Third-party app sandboxes cannot reliably read another app-specific domain.
+// Unique, prefixed keys in the global domain are served cross-process by
+// cfprefsd and work in system apps, WeChat, TikTok and other sandboxed apps.
+static NSString *const kPreferencesDomain = @".GlobalPreferences";
 
 static NSArray<NSString *> *KBButtonXPreferenceKeys(void) {
-    return @[@"pasteX", @"leftX", @"rightX", @"dismissX"];
+    return @[@"KBETPasteX", @"KBETLeftX", @"KBETRightX", @"KBETDismissX"];
 }
 
 static NSArray<NSString *> *KBButtonYPreferenceKeys(void) {
-    return @[@"pasteY", @"leftY", @"rightY", @"dismissY"];
+    return @[@"KBETPasteY", @"KBETLeftY", @"KBETRightY", @"KBETDismissY"];
 }
 
-static CGFloat KBPreferenceFloat(NSString *key) {
-    CFPropertyListRef value = CFPreferencesCopyAppValue(
-        (__bridge CFStringRef)key, (__bridge CFStringRef)kPreferencesDomain);
-    CGFloat result = 0.0;
+static NSArray<NSString *> *KBButtonSymbolNames(void) {
+    return @[@"arrow.up.doc.on.clipboard", @"arrow.left.circle",
+             @"arrow.right.circle", @"keyboard.chevron.compact.down"];
+}
+
+static CGFloat KBPreferenceFloatWithDefault(NSString *key, CGFloat defaultValue) {
+    CFPropertyListRef value = CFPreferencesCopyValue(
+        (__bridge CFStringRef)key,
+        (__bridge CFStringRef)kPreferencesDomain,
+        kCFPreferencesCurrentUser,
+        kCFPreferencesAnyHost);
+    CGFloat result = defaultValue;
     if (value && CFGetTypeID(value) == CFNumberGetTypeID()) {
         result = [(__bridge NSNumber *)value doubleValue];
     }
@@ -77,27 +89,41 @@ static CGFloat KBPreferenceFloat(NSString *key) {
     return result;
 }
 
+static CGFloat KBPreferenceFloat(NSString *key) {
+    return KBPreferenceFloatWithDefault(key, 0.0);
+}
+
 static void KBMigrateLegacyLayoutIfNeeded(void) {
-    CFPropertyListRef versionValue = CFPreferencesCopyAppValue(
-        CFSTR("layoutVersion"), (__bridge CFStringRef)kPreferencesDomain);
+    CFPropertyListRef versionValue = CFPreferencesCopyValue(
+        CFSTR("KBETLayoutVersion"),
+        (__bridge CFStringRef)kPreferencesDomain,
+        kCFPreferencesCurrentUser,
+        kCFPreferencesAnyHost);
     NSInteger version = 0;
     if (versionValue && CFGetTypeID(versionValue) == CFNumberGetTypeID()) {
         version = [(__bridge NSNumber *)versionValue integerValue];
     }
     if (versionValue) CFRelease(versionValue);
-    if (version >= 2) return;
+    if (version >= 3) return;
 
-    // 0.3.x measured Y from the middle of the whole keyboard view. Its saved
-    // offsets are incompatible with the new system-dock anchor, so start the
-    // six-position layout cleanly once after upgrading.
+    // Earlier releases stored offsets in a private app-specific domain, which
+    // sandboxed apps could not read reliably. Start the global-domain layout
+    // cleanly once after upgrading.
     for (NSString *key in [KBButtonXPreferenceKeys()
                            arrayByAddingObjectsFromArray:KBButtonYPreferenceKeys()]) {
-        CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL,
-                                 (__bridge CFStringRef)kPreferencesDomain);
+        CFPreferencesSetValue((__bridge CFStringRef)key, NULL,
+                              (__bridge CFStringRef)kPreferencesDomain,
+                              kCFPreferencesCurrentUser,
+                              kCFPreferencesAnyHost);
     }
-    CFPreferencesSetAppValue(CFSTR("layoutVersion"), (__bridge CFNumberRef)@2,
-                             (__bridge CFStringRef)kPreferencesDomain);
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kPreferencesDomain);
+    CFPreferencesSetValue(CFSTR("KBETLayoutVersion"),
+                          (__bridge CFPropertyListRef)@3,
+                          (__bridge CFStringRef)kPreferencesDomain,
+                          kCFPreferencesCurrentUser,
+                          kCFPreferencesAnyHost);
+    CFPreferencesSynchronize((__bridge CFStringRef)kPreferencesDomain,
+                             kCFPreferencesCurrentUser,
+                             kCFPreferencesAnyHost);
 }
 
 // --- Resolve the text input owned by the active keyboard --------------------
@@ -283,6 +309,13 @@ static void KBClearAllText(void) {
     id delegate = KBCurrentInputDelegate(&keyboard);
     if (!delegate) return;
 
+    // Clearing only the delegate's marked range leaves the keyboard composer's
+    // raw Pinyin/candidate buffer alive; the next key then restores old text.
+    // DockX clears both the composer input and its candidates through this API.
+    if ([keyboard respondsToSelector:@selector(clearInputWithCandidatesCleared:)]) {
+        [keyboard clearInputWithCandidatesCleared:YES];
+    }
+
     // Pinyin/Japanese and other IMEs keep uncommitted keystrokes in a marked
     // text range. Calling UIKeyboardImpl deleteFromInput at this point removes
     // only one composing key. Remove the marked range first and end composition.
@@ -402,7 +435,9 @@ static BOOL KBFindSystemDockAnchors(UIView *dock,
 static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     // Refresh values written by the Settings process before reading them in
     // the current application process.
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kPreferencesDomain);
+    CFPreferencesSynchronize((__bridge CFStringRef)kPreferencesDomain,
+                             kCFPreferencesCurrentUser,
+                             kCFPreferencesAnyHost);
     KBMigrateLegacyLayoutIfNeeded();
 
     CGFloat width = CGRectGetWidth(dock.bounds);
@@ -411,8 +446,14 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
 
     NSArray<NSString *> *xKeys = KBButtonXPreferenceKeys();
     NSArray<NSString *> *yKeys = KBButtonYPreferenceKeys();
+    NSArray<NSString *> *symbolNames = KBButtonSymbolNames();
     const CGFloat buttonWidth = 60.0;
     const CGFloat buttonHeight = 44.0;
+    CGFloat iconPointSize = KBPreferenceFloatWithDefault(@"KBETIconPointSize", 22.0);
+    iconPointSize = MIN(44.0, MAX(12.0, iconPointSize));
+    UIImageSymbolConfiguration *symbolConfiguration =
+        [UIImageSymbolConfiguration configurationWithPointSize:iconPointSize
+                                                         weight:UIImageSymbolWeightRegular];
 
     // Use the real system globe/microphone centers when they can be found.
     // The fallback matches a six-column dock and places the row near the bottom.
@@ -434,6 +475,9 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
 
         button.bounds = CGRectMake(0.0, 0.0, buttonWidth, buttonHeight);
         button.center = CGPointMake(centerX, centerY);
+        [button setImage:[UIImage systemImageNamed:symbolNames[index]
+                                  withConfiguration:symbolConfiguration]
+                forState:UIControlStateNormal];
     }
 }
 
@@ -452,11 +496,11 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
         container.clipsToBounds = NO;
 
         NSArray *specs = @[
-            @[@"doc.on.clipboard", @"kb_didTapPaste", @"kb_didLongPressPaste:",
+            @[@"arrow.up.doc.on.clipboard", @"kb_didTapPaste", @"kb_didLongPressPaste:",
               @"Paste", @"Long press to select all and copy"],
-            @[@"chevron.left", @"kb_didTapLeft", @"kb_didLongPressLeft:",
+            @[@"arrow.left.circle", @"kb_didTapLeft", @"kb_didLongPressLeft:",
               @"Move cursor left", @"Long press to move to the beginning"],
-            @[@"chevron.right", @"kb_didTapRight", @"kb_didLongPressRight:",
+            @[@"arrow.right.circle", @"kb_didTapRight", @"kb_didLongPressRight:",
               @"Move cursor right", @"Long press to move to the end"],
             @[@"keyboard.chevron.compact.down", @"kb_didTapDismiss",
               @"kb_didLongPressDismiss:", @"Dismiss keyboard",
