@@ -13,6 +13,12 @@
 - (void)dismissKeyboard;
 @end
 
+// UIKeyboardDockView is a private UIKit class. Declaring it as a UIView subclass
+// lets the compiler resolve UIView methods/properties (viewWithTag:, addSubview:,
+// centerXAnchor, bottomAnchor, ...) on `self` inside the hook.
+@interface UIKeyboardDockView : UIView
+@end
+
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
 
 // --- Find the current first responder if it is a text input ------------------
