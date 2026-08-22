@@ -9,9 +9,6 @@ TWEAK_NAME = KBEditToolbar
 KBEditToolbar_FILES = Tweak.x
 KBEditToolbar_CFLAGS = -fobjc-arc -Os -ffunction-sections -fdata-sections
 KBEditToolbar_LDFLAGS = -Wl,-dead_strip
-KBEditToolbar_FRAMEWORKS = UIKit Foundation CoreFoundation
+KBEditToolbar_FRAMEWORKS = UIKit Foundation
 
 include $(THEOS_MAKE_PATH)/tweak.mk
-
-SUBPROJECTS += kbedittoolbarprefs
-include $(THEOS_MAKE_PATH)/aggregate.mk

@@ -1,9 +1,9 @@
 Package: cn.example.kbedittoolbar
-Name: Keyboard Edit Toolbar (学习版)
-Version: 0.8.0
+Name: Keyboard Edit Toolbar (焊死配置版)
+Version: 0.8.0-fixed
 Architecture: iphoneos-arm64
-Description: Keyboard toolbar with independent RootHide preferences, optimized caching and complete customization.
+Description: Fixed RootHide build using the exact user-supplied KBET profile; no settings bundle or runtime preference access.
 Maintainer: you
 Author: you
 Section: Tweaks
-Depends: mobilesubstrate, preferenceloader
+Depends: mobilesubstrate

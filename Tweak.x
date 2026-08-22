@@ -1,6 +1,5 @@
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
-#import <roothide.h>
 
 // ============================================================================
 // KBEditToolbar — keyboard toolbar with 4 buttons:
@@ -57,115 +56,21 @@
 
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
 static const NSInteger kButtonTagBase = 0x4B60;
-static const NSInteger kGuideViewTag = 0x4B70;
 static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
-// Third-party app sandboxes cannot reliably read another app-specific domain.
-// Unique, prefixed keys in the global domain are served cross-process by
-// cfprefsd and work in system apps, WeChat, TikTok and other sandboxed apps.
-static NSString *const kLegacyPreferencesDomain = @".GlobalPreferences";
-static NSString *const kPreferencesFilename = @"cn.example.kbedittoolbar.preferences.plist";
-static NSDictionary *gPreferences = nil;
-
-static NSString *KBPreferencesPath(void) {
-    return jbroot([@"/var/mobile/Library/Preferences"
-                   stringByAppendingPathComponent:kPreferencesFilename]);
-}
-
-static void KBReloadPreferences(void) {
-    gPreferences = [NSDictionary dictionaryWithContentsOfFile:KBPreferencesPath()] ?: @{};
-}
-
-static void KBPreferencesChanged(CFNotificationCenterRef center, void *observer,
-                                 CFStringRef name, const void *object,
-                                 CFDictionaryRef userInfo) {
-    dispatch_async(dispatch_get_main_queue(), ^{ KBReloadPreferences(); });
-}
-
-static NSArray<NSString *> *KBButtonXPreferenceKeys(void) {
-    return @[@"KBETPasteX", @"KBETLeftX", @"KBETRightX", @"KBETDismissX"];
-}
-
-static NSArray<NSString *> *KBButtonYPreferenceKeys(void) {
-    return @[@"KBETPasteY", @"KBETLeftY", @"KBETRightY", @"KBETDismissY"];
-}
-
-static NSArray<NSString *> *KBDefaultButtonSymbolNames(void) {
-    return @[@"arrow.up.doc.on.clipboard", @"arrow.left.circle",
-             @"arrow.right.circle", @"keyboard.chevron.compact.down"];
-}
-
-static NSArray<NSString *> *KBButtonSymbolPreferenceKeys(void) {
-    return @[@"KBETPasteSymbol", @"KBETLeftSymbol",
-             @"KBETRightSymbol", @"KBETDismissSymbol"];
-}
-
-static NSArray<NSString *> *KBButtonSizePreferenceKeys(void) {
-    return @[@"KBETPasteIconPointSize", @"KBETLeftIconPointSize",
-             @"KBETRightIconPointSize", @"KBETDismissIconPointSize"];
-}
-
-static CGFloat KBPreferenceFloatWithDefault(NSString *key, CGFloat defaultValue) {
-    id value = gPreferences[key];
-    CGFloat result = defaultValue;
-    if ([value respondsToSelector:@selector(doubleValue)]) {
-        result = [value doubleValue];
+static NSString *KBFixedSymbol(NSInteger index) {
+    switch (index) {
+        case 0: return @"doc.on.clipboard";
+        case 1: return @"chevron.backward.circle";
+        case 2: return @"chevron.right.circle";
+        default: return @"keyboard.chevron.compact.down";
     }
-    return result;
 }
 
-static NSString *KBPreferenceStringWithDefault(NSString *key, NSString *defaultValue) {
-    id value = gPreferences[key];
-    NSString *result = defaultValue;
-    if ([value isKindOfClass:[NSString class]] && [value length] > 0) {
-        result = [value copy];
-    }
-    return result;
-}
-
-static CGFloat KBPreferenceFloat(NSString *key) {
-    return KBPreferenceFloatWithDefault(key, 0.0);
-}
-
-static BOOL KBPreferenceBoolWithDefault(NSString *key, BOOL defaultValue) {
-    return KBPreferenceFloatWithDefault(key, defaultValue ? 1.0 : 0.0) != 0.0;
-}
-
-static UIColor *KBColorFromHexString(NSString *hex, UIColor *fallback) {
-    NSString *value = [[hex stringByTrimmingCharactersInSet:
-                        [NSCharacterSet whitespaceAndNewlineCharacterSet]]
-                       stringByReplacingOccurrencesOfString:@"#" withString:@""];
-    if (value.length != 6 && value.length != 8) return fallback;
-    unsigned long long rgba = 0;
-    if (![[NSScanner scannerWithString:value] scanHexLongLong:&rgba]) return fallback;
-    CGFloat red, green, blue, alpha = 1.0;
-    if (value.length == 8) {
-        red = ((rgba >> 24) & 0xFF) / 255.0;
-        green = ((rgba >> 16) & 0xFF) / 255.0;
-        blue = ((rgba >> 8) & 0xFF) / 255.0;
-        alpha = (rgba & 0xFF) / 255.0;
-    } else {
-        red = ((rgba >> 16) & 0xFF) / 255.0;
-        green = ((rgba >> 8) & 0xFF) / 255.0;
-        blue = (rgba & 0xFF) / 255.0;
-    }
-    return [UIColor colorWithRed:red green:green blue:blue alpha:alpha];
-}
-
-static void KBMigrateLegacyLayoutIfNeeded(void) {
-    if (gPreferences.count > 0) return;
-    CFArrayRef keyList = CFPreferencesCopyKeyList(
-        (__bridge CFStringRef)kLegacyPreferencesDomain,
-        kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-    NSMutableDictionary *migrated = [NSMutableDictionary dictionary];
-    for (NSString *key in CFBridgingRelease(keyList) ?: @[]) {
-        if (![key hasPrefix:@"KBET"]) continue;
-        CFPropertyListRef value = CFPreferencesCopyValue(
-            (__bridge CFStringRef)key, (__bridge CFStringRef)kLegacyPreferencesDomain,
-            kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        if (value) migrated[key] = CFBridgingRelease(value);
-    }
-    if (migrated.count > 0 && [migrated writeToFile:KBPreferencesPath() atomically:YES]) {
-        gPreferences = [migrated copy];
+static CGFloat KBFixedIconSize(NSInteger index) {
+    switch (index) {
+        case 0: return 17.0;
+        case 1: case 2: return 20.5;
+        default: return 18.0;
     }
 }
 
@@ -482,22 +387,12 @@ static BOOL KBFindSystemDockAnchors(UIView *dock,
 static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     // Refresh values written by the Settings process before reading them in
     // the current application process.
-    if (!gPreferences) KBReloadPreferences();
-    KBMigrateLegacyLayoutIfNeeded();
-
     CGFloat width = CGRectGetWidth(dock.bounds);
     CGFloat height = CGRectGetHeight(dock.bounds);
     if (width <= 0.0 || height <= 0.0) return;
 
-    NSArray<NSString *> *xKeys = KBButtonXPreferenceKeys();
-    NSArray<NSString *> *yKeys = KBButtonYPreferenceKeys();
-    NSArray<NSString *> *defaultSymbolNames = KBDefaultButtonSymbolNames();
-    NSArray<NSString *> *symbolKeys = KBButtonSymbolPreferenceKeys();
-    NSArray<NSString *> *sizeKeys = KBButtonSizePreferenceKeys();
-    CGFloat buttonWidth = MAX(0.1, KBPreferenceFloatWithDefault(@"KBETTouchWidth", 60.0));
-    CGFloat buttonHeight = MAX(0.1, KBPreferenceFloatWithDefault(@"KBETTouchHeight", 44.0));
-    NSTimeInterval longPressDuration =
-        MAX(0.0, KBPreferenceFloatWithDefault(@"KBETLongPressDurationMS", 500.0) / 1000.0);
+    const CGFloat buttonWidth = 60.0;
+    const CGFloat buttonHeight = 44.0;
 
     // Use the real system globe/microphone centers when they can be found.
     // The fallback matches a six-column dock and places the row near the bottom.
@@ -505,11 +400,7 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     CGPoint rightAnchor = CGPointMake(width * 11.0 / 12.0, height - 30.0);
     UIColor *systemTint = [UIColor labelColor];
     KBFindSystemDockAnchors(dock, container, &leftAnchor, &rightAnchor, &systemTint);
-    BOOL followsSystemTint = KBPreferenceBoolWithDefault(@"KBETFollowSystemTint", YES);
-    UIColor *buttonTint = followsSystemTint ? systemTint :
-        KBColorFromHexString(KBPreferenceStringWithDefault(@"KBETCustomTintHex", @"#000000"),
-                             systemTint);
-    BOOL showTouchShadow = KBPreferenceBoolWithDefault(@"KBETShowTouchShadow", NO);
+    UIColor *buttonTint = systemTint;
 
     for (NSInteger index = 0; index < 4; index++) {
         UIButton *button = (UIButton *)[container viewWithTag:kButtonTagBase + index];
@@ -520,74 +411,27 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
         CGFloat progress = ((CGFloat)index + 1.0) / 5.0;
         CGFloat baseX = leftAnchor.x + (rightAnchor.x - leftAnchor.x) * progress;
         CGFloat baseY = leftAnchor.y + (rightAnchor.y - leftAnchor.y) * progress;
-        CGFloat centerX = baseX + KBPreferenceFloat(xKeys[index]);
-        CGFloat centerY = baseY + KBPreferenceFloat(yKeys[index]);
+        CGFloat centerX = baseX;
+        CGFloat centerY = baseY - 6.0;
 
         button.bounds = CGRectMake(0.0, 0.0, buttonWidth, buttonHeight);
         button.center = CGPointMake(centerX, centerY);
         button.tintColor = buttonTint;
-        CGFloat iconPointSize = KBPreferenceFloatWithDefault(sizeKeys[index], 22.0);
-        iconPointSize = MAX(0.1, iconPointSize);
+        CGFloat iconPointSize = KBFixedIconSize(index);
         UIImageSymbolConfiguration *symbolConfiguration =
             [UIImageSymbolConfiguration configurationWithPointSize:iconPointSize
                                                              weight:UIImageSymbolWeightRegular];
-        NSString *symbolName = KBPreferenceStringWithDefault(symbolKeys[index],
-                                                              defaultSymbolNames[index]);
-        UIImage *image = [UIImage systemImageNamed:symbolName
+        UIImage *image = [UIImage systemImageNamed:KBFixedSymbol(index)
                                  withConfiguration:symbolConfiguration];
-        if (!image) {
-            image = [UIImage systemImageNamed:defaultSymbolNames[index]
-                            withConfiguration:symbolConfiguration];
-        }
         [button setImage:image forState:UIControlStateNormal];
-        button.layer.shadowColor = buttonTint.CGColor;
-        button.layer.shadowOpacity = showTouchShadow ? 0.8 : 0.0;
-        button.layer.shadowRadius = showTouchShadow ? 3.0 : 0.0;
-        button.layer.shadowOffset = CGSizeZero;
-        button.layer.shadowPath = showTouchShadow ?
-            [UIBezierPath bezierPathWithRoundedRect:button.bounds cornerRadius:8.0].CGPath : nil;
         for (UIGestureRecognizer *gesture in button.gestureRecognizers) {
             if ([gesture isKindOfClass:[UILongPressGestureRecognizer class]]) {
                 ((UILongPressGestureRecognizer *)gesture).minimumPressDuration =
-                    longPressDuration;
+                    0.3;
             }
         }
     }
 
-    UIView *guideView = [container viewWithTag:kGuideViewTag];
-    BOOL showGuides = KBPreferenceBoolWithDefault(@"KBETShowLayoutGuides", NO);
-    guideView.hidden = !showGuides;
-    if (showGuides) {
-        if (!guideView) {
-            guideView = [[UIView alloc] initWithFrame:container.bounds];
-            guideView.tag = kGuideViewTag;
-            guideView.userInteractionEnabled = NO;
-            guideView.backgroundColor = UIColor.clearColor;
-            [container insertSubview:guideView atIndex:0];
-        }
-        guideView.frame = container.bounds;
-        CAShapeLayer *guideLayer = (CAShapeLayer *)guideView.layer.sublayers.firstObject;
-        if (![guideLayer isKindOfClass:[CAShapeLayer class]]) {
-            guideLayer = [CAShapeLayer layer];
-            [guideView.layer addSublayer:guideLayer];
-        }
-        UIBezierPath *path = [UIBezierPath bezierPath];
-        CGFloat guideY = (leftAnchor.y + rightAnchor.y) / 2.0;
-        [path moveToPoint:CGPointMake(leftAnchor.x, guideY)];
-        [path addLineToPoint:CGPointMake(rightAnchor.x, guideY)];
-        for (NSInteger guideIndex = 0; guideIndex < 6; guideIndex++) {
-            CGFloat progress = (CGFloat)guideIndex / 5.0;
-            CGFloat guideX = leftAnchor.x + (rightAnchor.x - leftAnchor.x) * progress;
-            [path moveToPoint:CGPointMake(guideX, guideY - buttonHeight / 2.0 - 8.0)];
-            [path addLineToPoint:CGPointMake(guideX, guideY + buttonHeight / 2.0 + 8.0)];
-        }
-        guideLayer.frame = guideView.bounds;
-        guideLayer.path = path.CGPath;
-        guideLayer.strokeColor = [buttonTint colorWithAlphaComponent:0.65].CGColor;
-        guideLayer.fillColor = UIColor.clearColor.CGColor;
-        guideLayer.lineWidth = 1.0;
-        guideLayer.lineDashPattern = @[@4, @3];
-    }
 }
 
 %hook UIKeyboardDockView
@@ -605,9 +449,9 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
         container.clipsToBounds = NO;
 
         NSArray *specs = @[
-            @[@"arrow.up.doc.on.clipboard", @"kb_didTapPaste", @"kb_didLongPressPaste:",
+            @[@"doc.on.clipboard", @"kb_didTapPaste", @"kb_didLongPressPaste:",
               @"Paste", @"Long press to select all and copy"],
-            @[@"arrow.left.circle", @"kb_didTapLeft", @"kb_didLongPressLeft:",
+            @[@"chevron.backward.circle", @"kb_didTapLeft", @"kb_didLongPressLeft:",
               @"Move cursor left", @"Long press to move to the beginning"],
             @[@"arrow.right.circle", @"kb_didTapRight", @"kb_didLongPressRight:",
               @"Move cursor right", @"Long press to move to the end"],
@@ -630,9 +474,7 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
             UILongPressGestureRecognizer *longPress =
                 [[UILongPressGestureRecognizer alloc]
                     initWithTarget:self action:NSSelectorFromString(spec[2])];
-            longPress.minimumPressDuration =
-                MAX(0.0, KBPreferenceFloatWithDefault(@"KBETLongPressDurationMS", 500.0) /
-                         1000.0);
+            longPress.minimumPressDuration = 0.3;
             longPress.cancelsTouchesInView = YES;
             [button addGestureRecognizer:longPress];
             [container addSubview:button];
@@ -712,15 +554,3 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
 }
 
 %end
-
-%ctor {
-    @autoreleasepool {
-        KBReloadPreferences();
-        KBMigrateLegacyLayoutIfNeeded();
-        CFNotificationCenterAddObserver(
-            CFNotificationCenterGetDarwinNotifyCenter(), NULL,
-            KBPreferencesChanged,
-            CFSTR("cn.example.kbedittoolbar/preferencesChanged"),
-            NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
-    }
-}
