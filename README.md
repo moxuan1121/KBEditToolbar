@@ -72,6 +72,10 @@ X 负值向左、正值向右；Y 负值向上、正值向下。图标大小和 
 - 配置改为启动时读取、Darwin 通知到达时刷新，布局阶段只访问内存缓存，避免每次布局反复读取磁盘。
 - 启用 `-Os`、函数/数据分段和链接器死代码裁剪，降低动态库与 SpringBoard/键盘进程额外占用。
 
+### 0.8.1 体积优化
+
+- 针对用户的 iPhone 13 Pro Max 与 RootHide 环境只保留 `arm64e` 切片，移除包内未使用的 `arm64` 切片。
+
 ## 粘贴修复
 
 旧实现从键盘 Dock 调用 `sendAction:@selector(paste:) to:nil`，部分系统版本和 App 中无法通过响应链找到真正的输入对象。现在参考 [DockX](https://github.com/udevsharold/dockx) 的实现：

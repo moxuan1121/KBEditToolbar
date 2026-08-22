@@ -1,6 +1,6 @@
 Package: cn.example.kbedittoolbar
 Name: Keyboard Edit Toolbar (学习版)
-Version: 0.8.0
+Version: 0.8.1
 Architecture: iphoneos-arm64
 Description: Keyboard toolbar with independent RootHide preferences, optimized caching and complete customization.
 Maintainer: you
