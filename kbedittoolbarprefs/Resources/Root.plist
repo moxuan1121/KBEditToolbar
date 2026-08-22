@@ -14,6 +14,64 @@
         </dict>
 
         <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>颜色</string>
+            <key>footerText</key><string>默认跟随系统地球键的实际颜色。关闭后可用系统取色器或十六进制色值 DIY。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>跟随地球键颜色</string>
+            <key>defaults</key><string>.GlobalPreferences</string>
+            <key>key</key><string>KBETFollowSystemTint</string>
+            <key>default</key><true/>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
+            <key>label</key><string>自定义颜色</string>
+            <key>id</key><string>customTintHex</string>
+            <key>defaults</key><string>.GlobalPreferences</string>
+            <key>key</key><string>KBETCustomTintHex</string>
+            <key>default</key><string>#000000</string>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSButtonCell</string>
+            <key>label</key><string>打开系统取色器</string>
+            <key>action</key><string>openColorPicker</string>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>按压区域与辅助线</string>
+            <key>footerText</key><string>宽高可输入到小数点后一位。开启阴影可查看四个按钮的真实按压区域，调整完成后可手动关闭。辅助线包含一条高度横线和六条等距竖线。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string><key>label</key><string>按压区域宽度</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETTouchWidth</string>
+            <key>default</key><real>60</real><key>keyboardType</key><integer>8</integer>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string><key>label</key><string>按压区域高度</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETTouchHeight</string>
+            <key>default</key><real>44</real><key>keyboardType</key><integer>8</integer>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string><key>label</key><string>显示按压区域阴影</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETShowTouchShadow</string>
+            <key>default</key><false/>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string><key>label</key><string>显示布局辅助线</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETShowLayoutGuides</string>
+            <key>default</key><false/>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+
+        <dict>
             <key>cell</key>
             <string>PSGroupCell</string>
             <key>label</key>
@@ -187,7 +245,7 @@
             <key>cell</key>
             <string>PSGroupCell</string>
             <key>footerText</key>
-            <string>恢复默认会清除所有独立偏移、SF Symbol、各图标大小及长按时长设置。</string>
+            <string>恢复默认会清除颜色、按压区域、阴影、辅助线、独立偏移、SF Symbol、各图标大小及长按时长设置。</string>
         </dict>
         <dict>
             <key>cell</key>

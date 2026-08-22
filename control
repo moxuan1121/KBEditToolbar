@@ -1,8 +1,8 @@
 Package: cn.example.kbedittoolbar
 Name: Keyboard Edit Toolbar (学习版)
-Version: 0.6.0
+Version: 0.7.0
 Architecture: iphoneos-arm64
-Description: Keyboard toolbar with per-button layout, custom SF Symbols, independent icon sizes and configurable long press duration.
+Description: Keyboard toolbar with custom colors, touch-area visualization, layout guides and per-button customization.
 Maintainer: you
 Author: you
 Section: Tweaks

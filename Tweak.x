@@ -56,6 +56,7 @@
 
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
 static const NSInteger kButtonTagBase = 0x4B60;
+static const NSInteger kGuideViewTag = 0x4B70;
 static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
 // Third-party app sandboxes cannot reliably read another app-specific domain.
 // Unique, prefixed keys in the global domain are served cross-process by
@@ -117,6 +118,31 @@ static NSString *KBPreferenceStringWithDefault(NSString *key, NSString *defaultV
 
 static CGFloat KBPreferenceFloat(NSString *key) {
     return KBPreferenceFloatWithDefault(key, 0.0);
+}
+
+static BOOL KBPreferenceBoolWithDefault(NSString *key, BOOL defaultValue) {
+    return KBPreferenceFloatWithDefault(key, defaultValue ? 1.0 : 0.0) != 0.0;
+}
+
+static UIColor *KBColorFromHexString(NSString *hex, UIColor *fallback) {
+    NSString *value = [[hex stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+                       stringByReplacingOccurrencesOfString:@"#" withString:@""];
+    if (value.length != 6 && value.length != 8) return fallback;
+    unsigned long long rgba = 0;
+    if (![[NSScanner scannerWithString:value] scanHexLongLong:&rgba]) return fallback;
+    CGFloat red, green, blue, alpha = 1.0;
+    if (value.length == 8) {
+        red = ((rgba >> 24) & 0xFF) / 255.0;
+        green = ((rgba >> 16) & 0xFF) / 255.0;
+        blue = ((rgba >> 8) & 0xFF) / 255.0;
+        alpha = (rgba & 0xFF) / 255.0;
+    } else {
+        red = ((rgba >> 16) & 0xFF) / 255.0;
+        green = ((rgba >> 8) & 0xFF) / 255.0;
+        blue = (rgba & 0xFF) / 255.0;
+    }
+    return [UIColor colorWithRed:red green:green blue:blue alpha:alpha];
 }
 
 static void KBMigrateLegacyLayoutIfNeeded(void) {
@@ -412,7 +438,8 @@ static void KBCollectSystemControls(UIView *view,
 static BOOL KBFindSystemDockAnchors(UIView *dock,
                                     UIView *container,
                                     CGPoint *leftAnchor,
-                                    CGPoint *rightAnchor) {
+                                    CGPoint *rightAnchor,
+                                    UIColor **systemTint) {
     CGFloat width = CGRectGetWidth(dock.bounds);
     CGFloat height = CGRectGetHeight(dock.bounds);
     if (width <= 0.0 || height <= 0.0) return NO;
@@ -424,6 +451,7 @@ static BOOL KBFindSystemDockAnchors(UIView *dock,
     BOOL foundRight = NO;
     CGPoint bestLeft = CGPointZero;
     CGPoint bestRight = CGPointZero;
+    UIControl *bestLeftControl = nil;
     CGFloat bottomBandTop = height - MIN(80.0, height * 0.28);
 
     for (UIControl *control in controls) {
@@ -443,6 +471,7 @@ static BOOL KBFindSystemDockAnchors(UIView *dock,
         if (center.x < width * 0.28 &&
             (!foundLeft || center.y > bestLeft.y)) {
             bestLeft = center;
+            bestLeftControl = control;
             foundLeft = YES;
         }
         if (center.x > width * 0.72 &&
@@ -455,6 +484,7 @@ static BOOL KBFindSystemDockAnchors(UIView *dock,
     if (!foundLeft || !foundRight || bestRight.x <= bestLeft.x) return NO;
     if (leftAnchor) *leftAnchor = bestLeft;
     if (rightAnchor) *rightAnchor = bestRight;
+    if (systemTint) *systemTint = bestLeftControl.tintColor;
     return YES;
 }
 
@@ -475,8 +505,8 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     NSArray<NSString *> *defaultSymbolNames = KBDefaultButtonSymbolNames();
     NSArray<NSString *> *symbolKeys = KBButtonSymbolPreferenceKeys();
     NSArray<NSString *> *sizeKeys = KBButtonSizePreferenceKeys();
-    const CGFloat buttonWidth = 60.0;
-    const CGFloat buttonHeight = 44.0;
+    CGFloat buttonWidth = MAX(0.1, KBPreferenceFloatWithDefault(@"KBETTouchWidth", 60.0));
+    CGFloat buttonHeight = MAX(0.1, KBPreferenceFloatWithDefault(@"KBETTouchHeight", 44.0));
     NSTimeInterval longPressDuration =
         MAX(0.0, KBPreferenceFloatWithDefault(@"KBETLongPressDurationMS", 500.0) / 1000.0);
 
@@ -484,7 +514,13 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     // The fallback matches a six-column dock and places the row near the bottom.
     CGPoint leftAnchor = CGPointMake(width / 12.0, height - 30.0);
     CGPoint rightAnchor = CGPointMake(width * 11.0 / 12.0, height - 30.0);
-    KBFindSystemDockAnchors(dock, container, &leftAnchor, &rightAnchor);
+    UIColor *systemTint = [UIColor labelColor];
+    KBFindSystemDockAnchors(dock, container, &leftAnchor, &rightAnchor, &systemTint);
+    BOOL followsSystemTint = KBPreferenceBoolWithDefault(@"KBETFollowSystemTint", YES);
+    UIColor *buttonTint = followsSystemTint ? systemTint :
+        KBColorFromHexString(KBPreferenceStringWithDefault(@"KBETCustomTintHex", @"#000000"),
+                             systemTint);
+    BOOL showTouchShadow = KBPreferenceBoolWithDefault(@"KBETShowTouchShadow", NO);
 
     for (NSInteger index = 0; index < 4; index++) {
         UIButton *button = (UIButton *)[container viewWithTag:kButtonTagBase + index];
@@ -500,6 +536,7 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
 
         button.bounds = CGRectMake(0.0, 0.0, buttonWidth, buttonHeight);
         button.center = CGPointMake(centerX, centerY);
+        button.tintColor = buttonTint;
         CGFloat iconPointSize = KBPreferenceFloatWithDefault(sizeKeys[index], 22.0);
         iconPointSize = MAX(0.1, iconPointSize);
         UIImageSymbolConfiguration *symbolConfiguration =
@@ -514,12 +551,53 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
                             withConfiguration:symbolConfiguration];
         }
         [button setImage:image forState:UIControlStateNormal];
+        button.layer.shadowColor = buttonTint.CGColor;
+        button.layer.shadowOpacity = showTouchShadow ? 0.8 : 0.0;
+        button.layer.shadowRadius = showTouchShadow ? 3.0 : 0.0;
+        button.layer.shadowOffset = CGSizeZero;
+        button.layer.shadowPath = showTouchShadow ?
+            [UIBezierPath bezierPathWithRoundedRect:button.bounds cornerRadius:8.0].CGPath : nil;
         for (UIGestureRecognizer *gesture in button.gestureRecognizers) {
             if ([gesture isKindOfClass:[UILongPressGestureRecognizer class]]) {
                 ((UILongPressGestureRecognizer *)gesture).minimumPressDuration =
                     longPressDuration;
             }
         }
+    }
+
+    UIView *guideView = [container viewWithTag:kGuideViewTag];
+    BOOL showGuides = KBPreferenceBoolWithDefault(@"KBETShowLayoutGuides", NO);
+    guideView.hidden = !showGuides;
+    if (showGuides) {
+        if (!guideView) {
+            guideView = [[UIView alloc] initWithFrame:container.bounds];
+            guideView.tag = kGuideViewTag;
+            guideView.userInteractionEnabled = NO;
+            guideView.backgroundColor = UIColor.clearColor;
+            [container insertSubview:guideView atIndex:0];
+        }
+        guideView.frame = container.bounds;
+        CAShapeLayer *guideLayer = (CAShapeLayer *)guideView.layer.sublayers.firstObject;
+        if (![guideLayer isKindOfClass:[CAShapeLayer class]]) {
+            guideLayer = [CAShapeLayer layer];
+            [guideView.layer addSublayer:guideLayer];
+        }
+        UIBezierPath *path = [UIBezierPath bezierPath];
+        CGFloat guideY = (leftAnchor.y + rightAnchor.y) / 2.0;
+        [path moveToPoint:CGPointMake(leftAnchor.x, guideY)];
+        [path addLineToPoint:CGPointMake(rightAnchor.x, guideY)];
+        for (NSInteger guideIndex = 0; guideIndex < 6; guideIndex++) {
+            CGFloat progress = (CGFloat)guideIndex / 5.0;
+            CGFloat guideX = leftAnchor.x + (rightAnchor.x - leftAnchor.x) * progress;
+            [path moveToPoint:CGPointMake(guideX, guideY - buttonHeight / 2.0 - 8.0)];
+            [path addLineToPoint:CGPointMake(guideX, guideY + buttonHeight / 2.0 + 8.0)];
+        }
+        guideLayer.frame = guideView.bounds;
+        guideLayer.path = path.CGPath;
+        guideLayer.strokeColor = [buttonTint colorWithAlphaComponent:0.65].CGColor;
+        guideLayer.fillColor = UIColor.clearColor.CGColor;
+        guideLayer.lineWidth = 1.0;
+        guideLayer.lineDashPattern = @[@4, @3];
     }
 }
 
