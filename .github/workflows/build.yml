@@ -1,7 +1,10 @@
-name: Build rootless deb
+name: Build tweak (rootless + roothide)
 
-# Builds the tweak into an installable rootless .deb on a macOS runner.
-# No local WSL/Theos needed — push to GitHub and download the .deb from
+# Builds the tweak into installable .deb packages on a macOS runner.
+# Two variants via a matrix:
+#   - rootless : standard theos (theos/theos)   -> for rootless jailbreaks
+#   - roothide : roothide theos (roothide/theos) -> for Dopamine RootHide
+# No local WSL/Theos needed — push to GitHub, then download the .deb from
 # the run's Artifacts (or from the auto-created Release on a tag).
 
 on:
@@ -13,6 +16,15 @@ on:
 jobs:
   build:
     runs-on: macos-14     # Xcode 15.x, arm64e-capable toolchain
+    strategy:
+      fail-fast: false     # one variant failing must not cancel the other
+      matrix:
+        include:
+          - scheme: rootless
+            theos_repo: https://github.com/theos/theos.git
+          - scheme: roothide
+            theos_repo: https://github.com/roothide/theos.git
+    name: build-${{ matrix.scheme }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,29 +32,28 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_15.4.app || true
 
-      - name: Install Theos
+      - name: Install Theos (${{ matrix.scheme }})
         run: |
           export THEOS=$HOME/theos
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
-          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          # Recursive clone of the matching theos fork (submodules incl. lib/headers).
+          git clone --recursive "${{ matrix.theos_repo }}" "$THEOS"
 
-      - name: Add rootless SDK
+      - name: Ensure iOS SDK present
         run: |
-          # install-theos already fetches SDKs; ensure an iOS SDK is present.
-          ls "$THEOS/sdks" || (
+          ls "$THEOS/sdks"/*.sdk >/dev/null 2>&1 || \
             git clone --depth=1 https://github.com/theos/sdks.git "$THEOS/sdks"
-          )
 
-      - name: Build (FINALPACKAGE, rootless)
+      - name: Build (FINALPACKAGE, ${{ matrix.scheme }})
         run: |
           export THEOS=$HOME/theos
           make clean || true
-          make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless package
+          make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=${{ matrix.scheme }} package
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KBEditToolbar-rootless-deb
+          name: KBEditToolbar-${{ matrix.scheme }}-deb
           path: packages/*.deb
           if-no-files-found: error
 

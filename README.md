@@ -1,7 +1,9 @@
 # KBEditToolbar — 键盘工具条（粘贴 / 向左 / 向右 / 收起）
 
 在系统键盘底部加一排按钮：**粘贴、光标向左、光标向右、收起键盘**，点按带轻触感。
-本地无需 WSL/Theos —— 用 GitHub Actions 的 macOS runner 打包出 rootless `.deb`。
+本地无需 WSL/Theos —— 用 GitHub Actions 的 macOS runner 同时打包 **rootless + roothide** 两种 `.deb`。
+- **roothide**：Dopamine RootHide 原生格式（roothide 的 theos fork 打的，带 `jbroot()` 路径修补）。
+- **rootless**：标准 rootless 越狱格式。
 
 ## 功能与按钮
 | 按钮 | SF Symbol | 实现 |
@@ -19,9 +21,11 @@
    git remote add origin https://github.com/<你的账号>/<仓库名>.git
    git push -u origin main
    ```
-2. push 后进仓库 **Actions** 标签，工作流 `Build rootless deb` 会自动跑（也可点 `Run workflow` 手动触发）。
-3. 跑完点进那次运行，在 **Artifacts** 下载 `KBEditToolbar-rootless-deb`，解压得到 `.deb`。
-   - 打 tag（如 `v0.1.0`）push 会额外把 `.deb` 挂到 Release。
+2. push 后进仓库 **Actions** 标签，工作流会自动跑（也可点 `Run workflow` 手动触发），矩阵会并行打两种包。
+3. 跑完点进那次运行，在 **Artifacts** 下载：
+   - `KBEditToolbar-roothide-deb` → Dopamine RootHide 装这个
+   - `KBEditToolbar-rootless-deb` → 标准 rootless 越狱装这个
+   - 打 tag（如 `v0.1.0`）push 会额外把两种 `.deb` 都挂到 Release。
 
 ## 安装 / 验证
 - 用 Sileo/Zebra 安装 `.deb`（rootless 越狱如 Dopamine），或 `dpkg -i` 后 `killall -9 SpringBoard`。
