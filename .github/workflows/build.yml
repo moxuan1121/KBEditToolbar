@@ -1,0 +1,53 @@
+name: Build rootless deb
+
+# Builds the tweak into an installable rootless .deb on a macOS runner.
+# No local WSL/Theos needed — push to GitHub and download the .deb from
+# the run's Artifacts (or from the auto-created Release on a tag).
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:      # lets you run it manually from the Actions tab
+
+jobs:
+  build:
+    runs-on: macos-14     # Xcode 15.x, arm64e-capable toolchain
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app || true
+
+      - name: Install Theos
+        run: |
+          export THEOS=$HOME/theos
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+
+      - name: Add rootless SDK
+        run: |
+          # install-theos already fetches SDKs; ensure an iOS SDK is present.
+          ls "$THEOS/sdks" || (
+            git clone --depth=1 https://github.com/theos/sdks.git "$THEOS/sdks"
+          )
+
+      - name: Build (FINALPACKAGE, rootless)
+        run: |
+          export THEOS=$HOME/theos
+          make clean || true
+          make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless package
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KBEditToolbar-rootless-deb
+          path: packages/*.deb
+          if-no-files-found: error
+
+      - name: Attach .deb to Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packages/*.deb

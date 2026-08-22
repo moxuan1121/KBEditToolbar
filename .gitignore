@@ -1,0 +1,9 @@
+# Theos build output
+packages/
+.theos/
+obj/
+*.deb
+
+# macOS / editor junk
+.DS_Store
+*.swp
