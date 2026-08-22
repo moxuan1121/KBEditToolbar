@@ -1,6 +1,7 @@
 #import <Preferences/PSListController.h>
 #import <Preferences/PSSpecifier.h>
 #import <CoreFoundation/CoreFoundation.h>
+#import <math.h>
 
 static NSString *const kKBETPreferencesDomain = @".GlobalPreferences";
 static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/preferencesChanged";
@@ -32,6 +33,12 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
     NSString *key = [specifier propertyForKey:@"key"];
     if (key) {
+        BOOL isPosition = [key hasSuffix:@"X"] || [key hasSuffix:@"Y"];
+        BOOL isIconSize = [key hasSuffix:@"IconPointSize"];
+        if (isPosition || isIconSize) {
+            double rounded = round([value doubleValue] * 10.0) / 10.0;
+            value = [NSString stringWithFormat:@"%.1f", rounded];
+        }
         CFPreferencesSetValue((__bridge CFStringRef)key,
                               (__bridge CFPropertyListRef)value,
                               (__bridge CFStringRef)kKBETPreferencesDomain,
@@ -57,7 +64,11 @@ static NSString *const kKBETPreferencesChanged = @"cn.example.kbedittoolbar/pref
         @"KBETLeftX", @"KBETLeftY",
         @"KBETRightX", @"KBETRightY",
         @"KBETDismissX", @"KBETDismissY",
-        @"KBETIconPointSize",
+        @"KBETPasteSymbol", @"KBETLeftSymbol",
+        @"KBETRightSymbol", @"KBETDismissSymbol",
+        @"KBETPasteIconPointSize", @"KBETLeftIconPointSize",
+        @"KBETRightIconPointSize", @"KBETDismissIconPointSize",
+        @"KBETLongPressDurationMS",
     ];
     for (NSString *key in keys) {
         CFPreferencesSetValue((__bridge CFStringRef)key, NULL,

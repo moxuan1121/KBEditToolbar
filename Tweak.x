@@ -70,9 +70,19 @@ static NSArray<NSString *> *KBButtonYPreferenceKeys(void) {
     return @[@"KBETPasteY", @"KBETLeftY", @"KBETRightY", @"KBETDismissY"];
 }
 
-static NSArray<NSString *> *KBButtonSymbolNames(void) {
+static NSArray<NSString *> *KBDefaultButtonSymbolNames(void) {
     return @[@"arrow.up.doc.on.clipboard", @"arrow.left.circle",
              @"arrow.right.circle", @"keyboard.chevron.compact.down"];
+}
+
+static NSArray<NSString *> *KBButtonSymbolPreferenceKeys(void) {
+    return @[@"KBETPasteSymbol", @"KBETLeftSymbol",
+             @"KBETRightSymbol", @"KBETDismissSymbol"];
+}
+
+static NSArray<NSString *> *KBButtonSizePreferenceKeys(void) {
+    return @[@"KBETPasteIconPointSize", @"KBETLeftIconPointSize",
+             @"KBETRightIconPointSize", @"KBETDismissIconPointSize"];
 }
 
 static CGFloat KBPreferenceFloatWithDefault(NSString *key, CGFloat defaultValue) {
@@ -82,8 +92,24 @@ static CGFloat KBPreferenceFloatWithDefault(NSString *key, CGFloat defaultValue)
         kCFPreferencesCurrentUser,
         kCFPreferencesAnyHost);
     CGFloat result = defaultValue;
-    if (value && CFGetTypeID(value) == CFNumberGetTypeID()) {
-        result = [(__bridge NSNumber *)value doubleValue];
+    if (value && (CFGetTypeID(value) == CFNumberGetTypeID() ||
+                  CFGetTypeID(value) == CFStringGetTypeID())) {
+        result = [(__bridge id)value doubleValue];
+    }
+    if (value) CFRelease(value);
+    return result;
+}
+
+static NSString *KBPreferenceStringWithDefault(NSString *key, NSString *defaultValue) {
+    CFPropertyListRef value = CFPreferencesCopyValue(
+        (__bridge CFStringRef)key,
+        (__bridge CFStringRef)kPreferencesDomain,
+        kCFPreferencesCurrentUser,
+        kCFPreferencesAnyHost);
+    NSString *result = defaultValue;
+    if (value && CFGetTypeID(value) == CFStringGetTypeID() &&
+        [(__bridge NSString *)value length] > 0) {
+        result = [(__bridge NSString *)value copy];
     }
     if (value) CFRelease(value);
     return result;
@@ -446,14 +472,13 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
 
     NSArray<NSString *> *xKeys = KBButtonXPreferenceKeys();
     NSArray<NSString *> *yKeys = KBButtonYPreferenceKeys();
-    NSArray<NSString *> *symbolNames = KBButtonSymbolNames();
+    NSArray<NSString *> *defaultSymbolNames = KBDefaultButtonSymbolNames();
+    NSArray<NSString *> *symbolKeys = KBButtonSymbolPreferenceKeys();
+    NSArray<NSString *> *sizeKeys = KBButtonSizePreferenceKeys();
     const CGFloat buttonWidth = 60.0;
     const CGFloat buttonHeight = 44.0;
-    CGFloat iconPointSize = KBPreferenceFloatWithDefault(@"KBETIconPointSize", 22.0);
-    iconPointSize = MIN(44.0, MAX(12.0, iconPointSize));
-    UIImageSymbolConfiguration *symbolConfiguration =
-        [UIImageSymbolConfiguration configurationWithPointSize:iconPointSize
-                                                         weight:UIImageSymbolWeightRegular];
+    NSTimeInterval longPressDuration =
+        MAX(0.0, KBPreferenceFloatWithDefault(@"KBETLongPressDurationMS", 500.0) / 1000.0);
 
     // Use the real system globe/microphone centers when they can be found.
     // The fallback matches a six-column dock and places the row near the bottom.
@@ -475,9 +500,26 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
 
         button.bounds = CGRectMake(0.0, 0.0, buttonWidth, buttonHeight);
         button.center = CGPointMake(centerX, centerY);
-        [button setImage:[UIImage systemImageNamed:symbolNames[index]
-                                  withConfiguration:symbolConfiguration]
-                forState:UIControlStateNormal];
+        CGFloat iconPointSize = KBPreferenceFloatWithDefault(sizeKeys[index], 22.0);
+        iconPointSize = MAX(0.1, iconPointSize);
+        UIImageSymbolConfiguration *symbolConfiguration =
+            [UIImageSymbolConfiguration configurationWithPointSize:iconPointSize
+                                                             weight:UIImageSymbolWeightRegular];
+        NSString *symbolName = KBPreferenceStringWithDefault(symbolKeys[index],
+                                                              defaultSymbolNames[index]);
+        UIImage *image = [UIImage systemImageNamed:symbolName
+                                 withConfiguration:symbolConfiguration];
+        if (!image) {
+            image = [UIImage systemImageNamed:defaultSymbolNames[index]
+                            withConfiguration:symbolConfiguration];
+        }
+        [button setImage:image forState:UIControlStateNormal];
+        for (UIGestureRecognizer *gesture in button.gestureRecognizers) {
+            if ([gesture isKindOfClass:[UILongPressGestureRecognizer class]]) {
+                ((UILongPressGestureRecognizer *)gesture).minimumPressDuration =
+                    longPressDuration;
+            }
+        }
     }
 }
 
@@ -521,7 +563,9 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
             UILongPressGestureRecognizer *longPress =
                 [[UILongPressGestureRecognizer alloc]
                     initWithTarget:self action:NSSelectorFromString(spec[2])];
-            longPress.minimumPressDuration = 0.5;
+            longPress.minimumPressDuration =
+                MAX(0.0, KBPreferenceFloatWithDefault(@"KBETLongPressDurationMS", 500.0) /
+                         1000.0);
             longPress.cancelsTouchesInView = YES;
             [button addGestureRecognizer:longPress];
             [container addSubview:button];

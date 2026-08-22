@@ -17,21 +17,17 @@
             <key>cell</key>
             <string>PSGroupCell</string>
             <key>label</key>
-            <string>图标大小</string>
+            <string>长按设置</string>
             <key>footerText</key>
-            <string>只调整四个工具图标的显示大小，不改变按钮触控区域。</string>
+            <string>单位为毫秒，默认 500 ms。本版本不设置输入上限或下限；负数在运行时按 0 ms 处理。</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
-            <key>label</key><string>大小</string>
+            <key>cell</key><string>PSEditTextCell</string>
+            <key>label</key><string>长按时长（ms）</string>
             <key>defaults</key><string>.GlobalPreferences</string>
-            <key>key</key><string>KBETIconPointSize</string>
-            <key>default</key><real>22</real>
-            <key>min</key><real>12</real>
-            <key>max</key><real>44</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>32</integer>
+            <key>key</key><string>KBETLongPressDurationMS</string>
+            <key>default</key><string>500</string>
+            <key>keyboardType</key><integer>4</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -42,29 +38,37 @@
             <string>粘贴按钮</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
+            <key>cell</key><string>PSEditTextCell</string>
+            <key>label</key><string>SF Symbol</string>
+            <key>defaults</key><string>.GlobalPreferences</string>
+            <key>key</key><string>KBETPasteSymbol</string>
+            <key>default</key><string>arrow.up.doc.on.clipboard</string>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
+            <key>label</key><string>图标大小</string>
+            <key>defaults</key><string>.GlobalPreferences</string>
+            <key>key</key><string>KBETPasteIconPointSize</string>
+            <key>default</key><real>22</real><key>keyboardType</key><integer>8</integer>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
             <key>label</key><string>X：左右</string>
             <key>defaults</key><string>.GlobalPreferences</string>
             <key>key</key><string>KBETPasteX</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-500</real>
-            <key>max</key><real>500</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>200</integer>
+            <key>keyboardType</key><integer>2</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
+            <key>cell</key><string>PSEditTextCell</string>
             <key>label</key><string>Y：上下</string>
             <key>defaults</key><string>.GlobalPreferences</string>
             <key>key</key><string>KBETPasteY</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-400</real>
-            <key>max</key><real>400</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>160</integer>
+            <key>keyboardType</key><integer>2</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -75,29 +79,33 @@
             <string>向左按钮</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
+            <key>cell</key><string>PSEditTextCell</string><key>label</key><string>SF Symbol</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETLeftSymbol</string>
+            <key>default</key><string>arrow.left.circle</string>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string><key>label</key><string>图标大小</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETLeftIconPointSize</string>
+            <key>default</key><real>22</real><key>keyboardType</key><integer>8</integer>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
             <key>label</key><string>X：左右</string>
             <key>defaults</key><string>.GlobalPreferences</string>
             <key>key</key><string>KBETLeftX</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-500</real>
-            <key>max</key><real>500</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>200</integer>
+            <key>keyboardType</key><integer>2</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
+            <key>cell</key><string>PSEditTextCell</string>
             <key>label</key><string>Y：上下</string>
             <key>defaults</key><string>.GlobalPreferences</string>
             <key>key</key><string>KBETLeftY</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-400</real>
-            <key>max</key><real>400</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>160</integer>
+            <key>keyboardType</key><integer>2</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -108,29 +116,33 @@
             <string>向右按钮</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
+            <key>cell</key><string>PSEditTextCell</string><key>label</key><string>SF Symbol</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETRightSymbol</string>
+            <key>default</key><string>arrow.right.circle</string>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string><key>label</key><string>图标大小</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETRightIconPointSize</string>
+            <key>default</key><real>22</real><key>keyboardType</key><integer>8</integer>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
             <key>label</key><string>X：左右</string>
             <key>defaults</key><string>.GlobalPreferences</string>
             <key>key</key><string>KBETRightX</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-500</real>
-            <key>max</key><real>500</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>200</integer>
+            <key>keyboardType</key><integer>2</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
+            <key>cell</key><string>PSEditTextCell</string>
             <key>label</key><string>Y：上下</string>
             <key>defaults</key><string>.GlobalPreferences</string>
             <key>key</key><string>KBETRightY</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-400</real>
-            <key>max</key><real>400</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>160</integer>
+            <key>keyboardType</key><integer>2</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -141,29 +153,33 @@
             <string>收起键盘按钮</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
+            <key>cell</key><string>PSEditTextCell</string><key>label</key><string>SF Symbol</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETDismissSymbol</string>
+            <key>default</key><string>keyboard.chevron.compact.down</string>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string><key>label</key><string>图标大小</string>
+            <key>defaults</key><string>.GlobalPreferences</string><key>key</key><string>KBETDismissIconPointSize</string>
+            <key>default</key><real>22</real><key>keyboardType</key><integer>8</integer>
+            <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSEditTextCell</string>
             <key>label</key><string>X：左右</string>
             <key>defaults</key><string>.GlobalPreferences</string>
             <key>key</key><string>KBETDismissX</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-500</real>
-            <key>max</key><real>500</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>200</integer>
+            <key>keyboardType</key><integer>2</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSliderCell</string>
+            <key>cell</key><string>PSEditTextCell</string>
             <key>label</key><string>Y：上下</string>
             <key>defaults</key><string>.GlobalPreferences</string>
             <key>key</key><string>KBETDismissY</string>
             <key>default</key><real>0</real>
-            <key>min</key><real>-400</real>
-            <key>max</key><real>400</real>
-            <key>showValue</key><true/>
-            <key>isSegmented</key><true/>
-            <key>segmentCount</key><integer>160</integer>
+            <key>keyboardType</key><integer>2</integer>
             <key>PostNotification</key><string>cn.example.kbedittoolbar/preferencesChanged</string>
         </dict>
 
@@ -171,7 +187,7 @@
             <key>cell</key>
             <string>PSGroupCell</string>
             <key>footerText</key>
-            <string>恢复默认会清除所有独立偏移和图标大小设置，并把四个工具按钮放回地球和麦克风之间的六等距布局。</string>
+            <string>恢复默认会清除所有独立偏移、SF Symbol、各图标大小及长按时长设置。</string>
         </dict>
         <dict>
             <key>cell</key>
