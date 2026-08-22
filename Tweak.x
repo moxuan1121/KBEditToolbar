@@ -94,6 +94,7 @@ static CGFloat KBPreferenceFloatWithDefault(NSString *key, CGFloat defaultValue)
         kCFPreferencesAnyHost);
     CGFloat result = defaultValue;
     if (value && (CFGetTypeID(value) == CFNumberGetTypeID() ||
+                  CFGetTypeID(value) == CFBooleanGetTypeID() ||
                   CFGetTypeID(value) == CFStringGetTypeID())) {
         result = [(__bridge id)value doubleValue];
     }
