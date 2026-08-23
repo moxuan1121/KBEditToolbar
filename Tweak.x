@@ -134,7 +134,25 @@ static UITextRange *KBFullTextRange(id delegate) {
     return [delegate textRangeFromPosition:beginning toPosition:end];
 }
 
+static BOOL KBIsWebContentDelegate(id delegate) {
+    Class webContentClass = NSClassFromString(@"WKContentView");
+    return delegate && webContentClass &&
+           [delegate isKindOfClass:webContentClass];
+}
+
+static BOOL KBExecuteWebEditCommand(id delegate, NSString *command) {
+    SEL selector = NSSelectorFromString(@"executeEditCommandWithCallback:");
+    if (!KBIsWebContentDelegate(delegate) ||
+        ![delegate respondsToSelector:selector]) {
+        return NO;
+    }
+    ((void (*)(id, SEL, id))objc_msgSend)(delegate, selector, command);
+    return YES;
+}
+
 static void KBSelectAll(id delegate) {
+    if (KBExecuteWebEditCommand(delegate, @"selectAll")) return;
+
     if ([delegate respondsToSelector:@selector(selectAll:)]) {
         [delegate selectAll:nil];
         return;
@@ -151,7 +169,9 @@ static void KBCopySelection(void) {
     id delegate = KBCurrentInputDelegate(&keyboard);
     if (!delegate) return;
 
-    if ([delegate respondsToSelector:@selector(copy:)]) {
+    if (KBExecuteWebEditCommand(delegate, @"copy")) {
+        // WKContentView applies edit commands asynchronously.
+    } else if ([delegate respondsToSelector:@selector(copy:)]) {
         [delegate copy:nil];
     } else if ([delegate respondsToSelector:@selector(selectedTextRange)] &&
                [delegate respondsToSelector:@selector(textInRange:)]) {
@@ -192,15 +212,25 @@ static void KBPaste(void) {
     UIKeyboardImpl *keyboard = nil;
     id delegate = KBCurrentInputDelegate(&keyboard);
 
-    // This is the key fix: target the real input delegate directly instead of
-    // asking the responder chain to discover the destination from the dock.
+    // WKContentView's paste: implementation is intentionally inconsistent
+    // across Safari/WKWebView fields. Insert through the active keyboard input
+    // channel instead, which is also DockX's fallback for remote delegates.
+    NSString *text = [UIPasteboard generalPasteboard].string;
+    if (KBIsWebContentDelegate(delegate) && text.length > 0 &&
+        [keyboard respondsToSelector:@selector(insertText:)]) {
+        [keyboard insertText:text];
+        KBRefreshKeyboardState(keyboard);
+        return;
+    }
+
+    // Target the real input delegate directly instead of asking the responder
+    // chain to discover the destination from the keyboard dock.
     if ([delegate respondsToSelector:@selector(paste:)]) {
         [delegate paste:nil];
         return;
     }
 
     // Fallback used by DockX for delegates without UIResponder paste support.
-    NSString *text = [UIPasteboard generalPasteboard].string;
     if (!text) return;
     if ([keyboard respondsToSelector:@selector(insertText:)]) {
         [keyboard insertText:text];
@@ -213,6 +243,10 @@ static void KBPaste(void) {
 static void KBMoveCaret(BOOL left) {
     UIKeyboardImpl *keyboard = nil;
     id delegate = KBCurrentInputDelegate(&keyboard);
+    if (KBExecuteWebEditCommand(delegate, left ? @"moveLeft" : @"moveRight")) {
+        KBRefreshKeyboardState(keyboard);
+        return;
+    }
     if (![delegate respondsToSelector:@selector(selectedTextRange)] ||
         ![delegate respondsToSelector:@selector(positionFromPosition:offset:)] ||
         ![delegate respondsToSelector:@selector(textRangeFromPosition:toPosition:)] ||
@@ -239,12 +273,9 @@ static void KBMoveCaretToBoundary(BOOL beginning) {
 
     // WKContentView requires WebKit's edit command; this is the compatibility
     // branch used by DockX for Safari and other WKWebView inputs.
-    SEL webCommand = NSSelectorFromString(@"executeEditCommandWithCallback:");
-    if ([delegate isKindOfClass:NSClassFromString(@"WKContentView")] &&
-        [delegate respondsToSelector:webCommand]) {
-        NSString *command = beginning ? @"moveToBeginningOfDocument"
-                                      : @"moveToEndOfDocument";
-        ((void (*)(id, SEL, id))objc_msgSend)(delegate, webCommand, command);
+    NSString *webCommand = beginning ? @"moveToBeginningOfDocument"
+                                     : @"moveToEndOfDocument";
+    if (KBExecuteWebEditCommand(delegate, webCommand)) {
         KBRefreshKeyboardState(keyboard);
         return;
     }
@@ -300,6 +331,26 @@ static void KBClearAllText(void) {
                    dispatch_get_main_queue(), ^{
         UIKeyboardImpl *currentKeyboard = nil;
         id currentDelegate = KBCurrentInputDelegate(&currentKeyboard);
+
+        if (KBIsWebContentDelegate(currentDelegate)) {
+            KBSelectAll(currentDelegate);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                         (int64_t)(kSecondActionDelay * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                UIKeyboardImpl *webKeyboard = nil;
+                id webDelegate = KBCurrentInputDelegate(&webKeyboard);
+                if ([webKeyboard respondsToSelector:@selector(deleteFromInput)]) {
+                    [webKeyboard deleteFromInput];
+                    KBRefreshKeyboardState(webKeyboard);
+                } else if ([webDelegate respondsToSelector:@selector(deleteBackward)]) {
+                    [webDelegate deleteBackward];
+                } else {
+                    KBExecuteWebEditCommand(webDelegate, @"deleteBackward");
+                }
+            });
+            return;
+        }
+
         UITextRange *fullRange = KBFullTextRange(currentDelegate);
 
         // Replacing the complete document range bypasses the IME's one-key
