@@ -151,10 +151,10 @@ static BOOL KBExecuteWebEditCommand(id delegate, NSString *command) {
     return YES;
 }
 
-static void KBHideEditMenu(void) {
-    UIMenuController *legacyMenu = [UIMenuController sharedMenuController];
-    if (legacyMenu.menuVisible) {
-        [legacyMenu setMenuVisible:NO animated:NO];
+static void KBHideEditMenu(id delegate) {
+    if ([delegate isKindOfClass:[UIView class]]) {
+        [[UIMenuController sharedMenuController]
+            hideMenuFromView:(UIView *)delegate];
     }
 }
 
@@ -364,7 +364,7 @@ static void KBClearAllText(void) {
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                              (int64_t)(0.05 * NSEC_PER_SEC)),
                                dispatch_get_main_queue(), ^{
-                    KBHideEditMenu();
+                    KBHideEditMenu(webDelegate);
                 });
             });
             return;
