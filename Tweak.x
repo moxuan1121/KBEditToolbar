@@ -343,11 +343,16 @@ static void KBClearAllText(void) {
                            dispatch_get_main_queue(), ^{
                 UIKeyboardImpl *webKeyboard = nil;
                 id webDelegate = KBCurrentInputDelegate(&webKeyboard);
-                if ([webKeyboard respondsToSelector:@selector(deleteFromInput)]) {
+                // WKContentView owns the selection in the Web process. Delete
+                // through its UITextInput implementation so the selected
+                // range is committed there instead of only updating keyboard
+                // output state.
+                if ([webDelegate respondsToSelector:@selector(deleteBackward)]) {
+                    [webDelegate deleteBackward];
+                    KBRefreshKeyboardState(webKeyboard);
+                } else if ([webKeyboard respondsToSelector:@selector(deleteFromInput)]) {
                     [webKeyboard deleteFromInput];
                     KBRefreshKeyboardState(webKeyboard);
-                } else if ([webDelegate respondsToSelector:@selector(deleteBackward)]) {
-                    [webDelegate deleteBackward];
                 }
             });
             return;
