@@ -151,6 +151,29 @@ static BOOL KBExecuteWebEditCommand(id delegate, NSString *command) {
     return YES;
 }
 
+static void KBHideEditMenu(id delegate) {
+    UIMenuController *legacyMenu = [UIMenuController sharedMenuController];
+    if (legacyMenu.menuVisible) {
+        [legacyMenu setMenuVisible:NO animated:NO];
+    }
+
+    // iOS 16+ uses UIEditMenuInteraction instead of UIMenuController. Keep
+    // this dynamic so the tweak still builds against older RootHide SDKs.
+    SEL dismissSelector = NSSelectorFromString(@"dismissMenu");
+    UIView *view = [delegate isKindOfClass:[UIView class]] ? delegate : nil;
+    while (view) {
+        if ([view respondsToSelector:@selector(interactions)]) {
+            for (id interaction in view.interactions) {
+                if ([interaction respondsToSelector:dismissSelector]) {
+                    ((void (*)(id, SEL))objc_msgSend)(interaction,
+                                                     dismissSelector);
+                }
+            }
+        }
+        view = view.superview;
+    }
+}
+
 static void KBSelectAll(id delegate) {
     if ([delegate respondsToSelector:@selector(selectAll:)]) {
         [delegate selectAll:nil];
@@ -354,6 +377,11 @@ static void KBClearAllText(void) {
                     [webKeyboard deleteFromInput];
                     KBRefreshKeyboardState(webKeyboard);
                 }
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                             (int64_t)(0.05 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    KBHideEditMenu(webDelegate);
+                });
             });
             return;
         }
