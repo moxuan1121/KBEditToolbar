@@ -57,6 +57,7 @@
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
 static const NSInteger kButtonTagBase = 0x4B60;
 static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
+static const NSTimeInterval kWebSelectionDelay = 0.12;
 static NSString *KBFixedSymbol(NSInteger index) {
     switch (index) {
         case 0: return @"doc.on.clipboard";
@@ -151,8 +152,6 @@ static BOOL KBExecuteWebEditCommand(id delegate, NSString *command) {
 }
 
 static void KBSelectAll(id delegate) {
-    if (KBExecuteWebEditCommand(delegate, @"selectAll")) return;
-
     if ([delegate respondsToSelector:@selector(selectAll:)]) {
         [delegate selectAll:nil];
         return;
@@ -161,7 +160,12 @@ static void KBSelectAll(id delegate) {
     UITextRange *range = KBFullTextRange(delegate);
     if (range && [delegate respondsToSelector:@selector(setSelectedTextRange:)]) {
         [delegate setSelectedTextRange:range];
+        return;
     }
+
+    // Last-resort compatibility for a WebKit build that does not expose the
+    // standard UIResponder selection action.
+    KBExecuteWebEditCommand(delegate, @"selectAll");
 }
 
 static void KBCopySelection(void) {
@@ -169,10 +173,10 @@ static void KBCopySelection(void) {
     id delegate = KBCurrentInputDelegate(&keyboard);
     if (!delegate) return;
 
-    if (KBExecuteWebEditCommand(delegate, @"copy")) {
-        // WKContentView applies edit commands asynchronously.
-    } else if ([delegate respondsToSelector:@selector(copy:)]) {
+    if ([delegate respondsToSelector:@selector(copy:)]) {
         [delegate copy:nil];
+    } else if (KBExecuteWebEditCommand(delegate, @"copy")) {
+        // Compatibility fallback for WebKit builds without copy:.
     } else if ([delegate respondsToSelector:@selector(selectedTextRange)] &&
                [delegate respondsToSelector:@selector(textInRange:)]) {
         UITextRange *range = [delegate selectedTextRange];
@@ -335,7 +339,7 @@ static void KBClearAllText(void) {
         if (KBIsWebContentDelegate(currentDelegate)) {
             KBSelectAll(currentDelegate);
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                         (int64_t)(kSecondActionDelay * NSEC_PER_SEC)),
+                                         (int64_t)(kWebSelectionDelay * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
                 UIKeyboardImpl *webKeyboard = nil;
                 id webDelegate = KBCurrentInputDelegate(&webKeyboard);
@@ -344,8 +348,6 @@ static void KBClearAllText(void) {
                     KBRefreshKeyboardState(webKeyboard);
                 } else if ([webDelegate respondsToSelector:@selector(deleteBackward)]) {
                     [webDelegate deleteBackward];
-                } else {
-                    KBExecuteWebEditCommand(webDelegate, @"deleteBackward");
                 }
             });
             return;
