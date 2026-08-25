@@ -35,3 +35,5 @@
 ## RootHide 软件包生命周期
 
 焊死版只面向 Dopamine RootHide（`iphoneos-arm64e`，iOS 15 起），dylib 与 Filter plist 直接安装到 `/usr/lib/TweakInject`。包内不登记 `/Library/MobileSubstrate/DynamicLibraries` 兼容符号链接路径，不使用固定 `/var/jb` 前缀，也不包含维护脚本。卸载仅移除本包自己的 `KBEditToolbar.dylib` 和 `KBEditToolbar.plist`。
+
+DEB 标识符为合法小写形式 `com.moxuan.keyboardx`。它通过带版本上限的 `Conflicts/Replaces` 从旧标识符 `cn.example.kbedittoolbar` 迁移；旧包没有维护脚本，因此替换过程中不会递归清理共享目录或触碰 ElleKit。
