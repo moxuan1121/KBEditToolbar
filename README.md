@@ -86,6 +86,10 @@ X 负值向左、正值向右；Y 负值向上、正值向下。图标大小和 
 
 仓库的 GitHub Actions 只构建 **Dopamine RootHide** 使用的 roothide `.deb`：
 
+- 焊死版直接安装到 ElleKit 的实际注入目录 `/usr/lib/TweakInject`，不经过 `/Library/MobileSubstrate/DynamicLibraries` 兼容符号链接，也不使用普通 rootless 的固定 `/var/jb` 前缀。
+- 软件包没有 `preinst`、`postinst`、`prerm` 或 `postrm`；安装、升级和卸载只由 dpkg 管理本包自己的 `KBEditToolbar.dylib` 与 `KBEditToolbar.plist`。
+- 本包不包含、创建、删除或修复 ElleKit、PreferenceLoader 及其他软件包的文件。
+
 1. 推送到 `main` 或 `master` 会自动开始构建。
 2. 在 Actions 运行的 Artifacts 中下载 `KBEditToolbar-roothide-deb`。
 3. 推送 `v*` 标签时，还会把 `.deb` 附加到对应 GitHub Release。

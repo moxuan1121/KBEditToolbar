@@ -31,3 +31,7 @@
 横屏时整个工具条隐藏；如果首次唤起键盘就是横屏，则不会创建四个按钮及长按手势。返回竖屏后按上述固定配置显示。
 
 长按粘贴执行“全选并复制”前会检查完整输入内容；空字符串或只有空格、换行的内容不会触发复制，系统剪贴板保持上一次内容。
+
+## RootHide 软件包生命周期
+
+焊死版只面向 Dopamine RootHide（`iphoneos-arm64e`，iOS 15 起），dylib 与 Filter plist 直接安装到 `/usr/lib/TweakInject`。包内不登记 `/Library/MobileSubstrate/DynamicLibraries` 兼容符号链接路径，不使用固定 `/var/jb` 前缀，也不包含维护脚本。卸载仅移除本包自己的 `KBEditToolbar.dylib` 和 `KBEditToolbar.plist`。
