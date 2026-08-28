@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
+#include <math.h>
 
 // ============================================================================
 // KBEditToolbar — keyboard toolbar with 4 buttons:
@@ -40,8 +41,7 @@
 - (void)kb_didLongPressLeft:(UILongPressGestureRecognizer *)recognizer;
 - (void)kb_didLongPressRight:(UILongPressGestureRecognizer *)recognizer;
 - (void)kb_didLongPressDismiss:(UILongPressGestureRecognizer *)recognizer;
-- (void)kb_didSwipeLeft:(UISwipeGestureRecognizer *)recognizer;
-- (void)kb_didSwipeRight:(UISwipeGestureRecognizer *)recognizer;
+- (void)kb_didPanTouchpad:(UIPanGestureRecognizer *)recognizer;
 @end
 
 // The container occupies the dock so it can position buttons independently,
@@ -49,14 +49,12 @@
 static const NSInteger kToolbarTag = 0x4B54; // 'KT'
 static const NSInteger kButtonTagBase = 0x4B60;
 
-@interface KBPassthroughView : UIView
+@interface KBPassthroughView : UIView <UIGestureRecognizerDelegate>
+- (CGRect)kb_touchpadFrame;
 @end
 
 @implementation KBPassthroughView
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    UIView *hitView = [super hitTest:point withEvent:event];
-    if (hitView != self) return hitView;
-
+- (CGRect)kb_touchpadFrame {
     CGRect touchpadFrame = CGRectNull;
     for (NSInteger index = 0; index < 4; index++) {
         UIView *button = [self viewWithTag:kButtonTagBase + index];
@@ -65,8 +63,36 @@ static const NSInteger kButtonTagBase = 0x4B60;
                 ? button.frame : CGRectUnion(touchpadFrame, button.frame);
         }
     }
+    return touchpadFrame;
+}
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hitView = [super hitTest:point withEvent:event];
+    if (hitView != self) return hitView;
+
+    CGRect touchpadFrame = [self kb_touchpadFrame];
     return !CGRectIsNull(touchpadFrame) && CGRectContainsPoint(touchpadFrame, point)
         ? self : nil;
+}
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (![gestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]]) {
+        return YES;
+    }
+
+    CGRect touchpadFrame = [self kb_touchpadFrame];
+    CGPoint location = [gestureRecognizer locationInView:self];
+    if (CGRectIsNull(touchpadFrame) ||
+        !CGRectContainsPoint(touchpadFrame, location) ||
+        location.y > CGRectGetMinY(touchpadFrame) + 28.0) {
+        return NO;
+    }
+
+    CGPoint velocity = [(UIPanGestureRecognizer *)gestureRecognizer
+        velocityInView:self];
+    CGFloat horizontal = fabs(velocity.x);
+    CGFloat vertical = fabs(velocity.y);
+    return horizontal > 0.0 && horizontal >= vertical * 2.5;
 }
 @end
 
@@ -619,19 +645,13 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
             [container addSubview:button];
         }
 
-        UISwipeGestureRecognizer *swipeLeft =
-            [[UISwipeGestureRecognizer alloc]
-                initWithTarget:self action:@selector(kb_didSwipeLeft:)];
-        swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
-        swipeLeft.cancelsTouchesInView = YES;
-        [container addGestureRecognizer:swipeLeft];
-
-        UISwipeGestureRecognizer *swipeRight =
-            [[UISwipeGestureRecognizer alloc]
-                initWithTarget:self action:@selector(kb_didSwipeRight:)];
-        swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
-        swipeRight.cancelsTouchesInView = YES;
-        [container addGestureRecognizer:swipeRight];
+        UIPanGestureRecognizer *touchpadPan =
+            [[UIPanGestureRecognizer alloc]
+                initWithTarget:self action:@selector(kb_didPanTouchpad:)];
+        touchpadPan.delegate = (KBPassthroughView *)container;
+        touchpadPan.maximumNumberOfTouches = 1;
+        touchpadPan.cancelsTouchesInView = YES;
+        [container addGestureRecognizer:touchpadPan];
 
         self.clipsToBounds = NO;
         [self addSubview:container];
@@ -709,17 +729,19 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
 }
 
 %new
-- (void)kb_didSwipeLeft:(UISwipeGestureRecognizer *)recognizer {
+- (void)kb_didPanTouchpad:(UIPanGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateEnded) return;
-    [self kb_haptic];
-    KBDeleteFromCaretToBoundary(YES);
-}
 
-%new
-- (void)kb_didSwipeRight:(UISwipeGestureRecognizer *)recognizer {
-    if (recognizer.state != UIGestureRecognizerStateEnded) return;
+    CGPoint translation = [recognizer translationInView:recognizer.view];
+    CGFloat horizontal = fabs(translation.x);
+    CGFloat vertical = fabs(translation.y);
+    if (horizontal < 40.0 || vertical > 12.0 ||
+        horizontal < vertical * 2.5) {
+        return;
+    }
+
     [self kb_haptic];
-    KBDeleteFromCaretToBoundary(NO);
+    KBDeleteFromCaretToBoundary(translation.x < 0.0);
 }
 
 %end
