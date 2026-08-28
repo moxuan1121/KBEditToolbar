@@ -56,7 +56,9 @@ static const NSInteger kButtonTagBase = 0x4B60;
 @implementation KBPassthroughView
 - (CGRect)kb_touchpadFrame {
     CGRect touchpadFrame = CGRectNull;
-    for (NSInteger index = 0; index < 4; index++) {
+    // Only the two cursor buttons form the swipe touchpad. Paste and dismiss
+    // keep their normal tap/long-press behavior without starting a swipe.
+    for (NSInteger index = 1; index <= 2; index++) {
         UIView *button = [self viewWithTag:kButtonTagBase + index];
         if (button && !button.hidden) {
             touchpadFrame = CGRectIsNull(touchpadFrame)
