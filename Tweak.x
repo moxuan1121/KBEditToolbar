@@ -40,22 +40,36 @@
 - (void)kb_didLongPressLeft:(UILongPressGestureRecognizer *)recognizer;
 - (void)kb_didLongPressRight:(UILongPressGestureRecognizer *)recognizer;
 - (void)kb_didLongPressDismiss:(UILongPressGestureRecognizer *)recognizer;
+- (void)kb_didSwipeLeft:(UISwipeGestureRecognizer *)recognizer;
+- (void)kb_didSwipeRight:(UISwipeGestureRecognizer *)recognizer;
 @end
 
 // The container occupies the dock so it can position buttons independently,
 // but its transparent area must not intercept the system globe/microphone.
+static const NSInteger kToolbarTag = 0x4B54; // 'KT'
+static const NSInteger kButtonTagBase = 0x4B60;
+
 @interface KBPassthroughView : UIView
 @end
 
 @implementation KBPassthroughView
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     UIView *hitView = [super hitTest:point withEvent:event];
-    return hitView == self ? nil : hitView;
+    if (hitView != self) return hitView;
+
+    CGRect touchpadFrame = CGRectNull;
+    for (NSInteger index = 0; index < 4; index++) {
+        UIView *button = [self viewWithTag:kButtonTagBase + index];
+        if (button && !button.hidden) {
+            touchpadFrame = CGRectIsNull(touchpadFrame)
+                ? button.frame : CGRectUnion(touchpadFrame, button.frame);
+        }
+    }
+    return !CGRectIsNull(touchpadFrame) && CGRectContainsPoint(touchpadFrame, point)
+        ? self : nil;
 }
 @end
 
-static const NSInteger kToolbarTag = 0x4B54; // 'KT'
-static const NSInteger kButtonTagBase = 0x4B60;
 static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
 static const NSTimeInterval kWebSelectionDelay = 0.12;
 static NSString *KBFixedSymbol(NSInteger index) {
@@ -304,6 +318,43 @@ static void KBMoveCaretToBoundary(BOOL beginning) {
         [delegate textRangeFromPosition:position toPosition:position];
     if (range) [delegate setSelectedTextRange:range];
     KBRefreshKeyboardState(keyboard);
+}
+
+static void KBDeleteFromCaretToBoundary(BOOL towardBeginning) {
+    UIKeyboardImpl *keyboard = nil;
+    id delegate = KBCurrentInputDelegate(&keyboard);
+    if (!delegate) return;
+
+    // WKContentView owns its selection in the Web process. WebKit editing
+    // commands preserve the same semantics as deleting to a document boundary
+    // from a hardware keyboard.
+    NSString *webCommand = towardBeginning ? @"deleteToBeginningOfDocument"
+                                           : @"deleteToEndOfDocument";
+    if (KBExecuteWebEditCommand(delegate, webCommand)) {
+        KBRefreshKeyboardState(keyboard);
+        return;
+    }
+
+    if (![delegate respondsToSelector:@selector(selectedTextRange)] ||
+        ![delegate respondsToSelector:@selector(beginningOfDocument)] ||
+        ![delegate respondsToSelector:@selector(endOfDocument)] ||
+        ![delegate respondsToSelector:@selector(textRangeFromPosition:toPosition:)] ||
+        ![delegate respondsToSelector:@selector(replaceRange:withText:)]) {
+        return;
+    }
+
+    UITextRange *selection = [delegate selectedTextRange];
+    if (!selection) return;
+    UITextPosition *start = towardBeginning ? [delegate beginningOfDocument]
+                                            : selection.end;
+    UITextPosition *end = towardBeginning ? selection.start
+                                          : [delegate endOfDocument];
+    if (!start || !end) return;
+    UITextRange *range = [delegate textRangeFromPosition:start toPosition:end];
+    if (range) {
+        [delegate replaceRange:range withText:@""];
+        KBRefreshKeyboardState(keyboard);
+    }
 }
 
 static void KBClearAllText(void) {
@@ -564,8 +615,23 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
             longPress.minimumPressDuration = 0.3;
             longPress.cancelsTouchesInView = YES;
             [button addGestureRecognizer:longPress];
+
             [container addSubview:button];
         }
+
+        UISwipeGestureRecognizer *swipeLeft =
+            [[UISwipeGestureRecognizer alloc]
+                initWithTarget:self action:@selector(kb_didSwipeLeft:)];
+        swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
+        swipeLeft.cancelsTouchesInView = YES;
+        [container addGestureRecognizer:swipeLeft];
+
+        UISwipeGestureRecognizer *swipeRight =
+            [[UISwipeGestureRecognizer alloc]
+                initWithTarget:self action:@selector(kb_didSwipeRight:)];
+        swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
+        swipeRight.cancelsTouchesInView = YES;
+        [container addGestureRecognizer:swipeRight];
 
         self.clipsToBounds = NO;
         [self addSubview:container];
@@ -640,6 +706,20 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     if (recognizer.state != UIGestureRecognizerStateBegan) return;
     [self kb_haptic];
     KBClearAllText();
+}
+
+%new
+- (void)kb_didSwipeLeft:(UISwipeGestureRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateEnded) return;
+    [self kb_haptic];
+    KBDeleteFromCaretToBoundary(YES);
+}
+
+%new
+- (void)kb_didSwipeRight:(UISwipeGestureRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateEnded) return;
+    [self kb_haptic];
+    KBDeleteFromCaretToBoundary(NO);
 }
 
 %end
