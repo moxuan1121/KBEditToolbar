@@ -573,15 +573,16 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
         container.backgroundColor = [UIColor clearColor];
         container.clipsToBounds = NO;
 
+        const CGFloat iconSizes[] = {17.0, 20.5, 20.5, 18.0};
         NSArray *specs = @[
-            @[@"doc.on.clipboard", @17.0, @"kb_didTapPaste", @"kb_didLongPressPaste:",
+            @[@"doc.on.clipboard", @"kb_didTapPaste", @"kb_didLongPressPaste:",
               @"Paste", @"Long press to select all and copy"],
-            @[@"chevron.backward.circle", @20.5, @"kb_didTapLeft", @"kb_didLongPressLeft:",
+            @[@"chevron.backward.circle", @"kb_didTapLeft", @"kb_didLongPressLeft:",
               @"Move cursor left", @"Long press to move to the beginning"],
-            @[@"chevron.right.circle", @20.5, @"kb_didTapRight", @"kb_didLongPressRight:",
+            @[@"chevron.right.circle", @"kb_didTapRight", @"kb_didLongPressRight:",
               @"Move cursor right", @"Long press to move to the end"],
-            @[@"keyboard.chevron.compact.down", @18.0,
-              @"kb_didTapDismiss", @"kb_didLongPressDismiss:", @"Dismiss keyboard",
+            @[@"keyboard.chevron.compact.down", @"kb_didTapDismiss",
+              @"kb_didLongPressDismiss:", @"Dismiss keyboard",
               @"Long press to clear all text"],
         ];
         for (NSUInteger index = 0; index < specs.count; index++) {
@@ -590,19 +591,19 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
             button.tag = kButtonTagBase + index;
             button.bounds = CGRectMake(0.0, 0.0, 60.0, 44.0);
             UIImageSymbolConfiguration *configuration =
-                [UIImageSymbolConfiguration configurationWithPointSize:[spec[1] doubleValue]
+                [UIImageSymbolConfiguration configurationWithPointSize:iconSizes[index]
                                                                  weight:UIImageSymbolWeightRegular];
             [button setImage:[UIImage systemImageNamed:spec[0]
                                        withConfiguration:configuration]
                     forState:UIControlStateNormal];
-            button.accessibilityLabel = spec[4];
-            button.accessibilityHint = spec[5];
-            [button addTarget:self action:NSSelectorFromString(spec[2])
+            button.accessibilityLabel = spec[3];
+            button.accessibilityHint = spec[4];
+            [button addTarget:self action:NSSelectorFromString(spec[1])
                forControlEvents:UIControlEventTouchUpInside];
 
             UILongPressGestureRecognizer *longPress =
                 [[UILongPressGestureRecognizer alloc]
-                    initWithTarget:self action:NSSelectorFromString(spec[3])];
+                    initWithTarget:self action:NSSelectorFromString(spec[2])];
             longPress.minimumPressDuration = 0.3;
             longPress.cancelsTouchesInView = YES;
             [button addGestureRecognizer:longPress];
