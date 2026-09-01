@@ -100,22 +100,6 @@ static const NSInteger kButtonTagBase = 0x4B60;
 
 static const NSTimeInterval kSecondActionDelay = 0.05; // same delay as DockX
 static const NSTimeInterval kWebSelectionDelay = 0.12;
-static NSString *KBFixedSymbol(NSInteger index) {
-    switch (index) {
-        case 0: return @"doc.on.clipboard";
-        case 1: return @"chevron.backward.circle";
-        case 2: return @"chevron.right.circle";
-        default: return @"keyboard.chevron.compact.down";
-    }
-}
-
-static CGFloat KBFixedIconSize(NSInteger index) {
-    switch (index) {
-        case 0: return 17.0;
-        case 1: case 2: return 20.5;
-        default: return 18.0;
-    }
-}
 
 // --- Resolve the text input owned by the active keyboard --------------------
 static __weak id gCaptured;
@@ -546,14 +530,9 @@ static BOOL KBFindSystemDockAnchors(UIView *dock,
 }
 
 static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
-    // Refresh values written by the Settings process before reading them in
-    // the current application process.
     CGFloat width = CGRectGetWidth(dock.bounds);
     CGFloat height = CGRectGetHeight(dock.bounds);
     if (width <= 0.0 || height <= 0.0) return;
-
-    const CGFloat buttonWidth = 60.0;
-    const CGFloat buttonHeight = 44.0;
 
     // Use the real system globe/microphone centers when they can be found.
     // The fallback matches a six-column dock and places the row near the bottom.
@@ -561,8 +540,6 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
     CGPoint rightAnchor = CGPointMake(width * 11.0 / 12.0, height - 30.0);
     UIColor *systemTint = [UIColor labelColor];
     KBFindSystemDockAnchors(dock, container, &leftAnchor, &rightAnchor, &systemTint);
-    UIColor *buttonTint = systemTint;
-
     for (NSInteger index = 0; index < 4; index++) {
         UIButton *button = (UIButton *)[container viewWithTag:kButtonTagBase + index];
         if (!button) continue;
@@ -570,29 +547,11 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
         // Interpolate four positions between the system controls. Together the
         // globe, four custom buttons and microphone form six equal intervals.
         CGFloat progress = ((CGFloat)index + 1.0) / 5.0;
-        CGFloat baseX = leftAnchor.x + (rightAnchor.x - leftAnchor.x) * progress;
-        CGFloat baseY = leftAnchor.y + (rightAnchor.y - leftAnchor.y) * progress;
-        CGFloat centerX = baseX;
-        CGFloat centerY = baseY - 6.0;
-
-        button.bounds = CGRectMake(0.0, 0.0, buttonWidth, buttonHeight);
-        button.center = CGPointMake(centerX, centerY);
-        button.tintColor = buttonTint;
-        CGFloat iconPointSize = KBFixedIconSize(index);
-        UIImageSymbolConfiguration *symbolConfiguration =
-            [UIImageSymbolConfiguration configurationWithPointSize:iconPointSize
-                                                             weight:UIImageSymbolWeightRegular];
-        UIImage *image = [UIImage systemImageNamed:KBFixedSymbol(index)
-                                 withConfiguration:symbolConfiguration];
-        [button setImage:image forState:UIControlStateNormal];
-        for (UIGestureRecognizer *gesture in button.gestureRecognizers) {
-            if ([gesture isKindOfClass:[UILongPressGestureRecognizer class]]) {
-                ((UILongPressGestureRecognizer *)gesture).minimumPressDuration =
-                    0.3;
-            }
-        }
+        button.center = CGPointMake(
+            leftAnchor.x + (rightAnchor.x - leftAnchor.x) * progress,
+            leftAnchor.y + (rightAnchor.y - leftAnchor.y) * progress - 6.0);
+        button.tintColor = systemTint;
     }
-
 }
 
 %hook UIKeyboardDockView
@@ -615,31 +574,35 @@ static void KBLayoutToolbarButtons(UIView *dock, UIView *container) {
         container.clipsToBounds = NO;
 
         NSArray *specs = @[
-            @[@"doc.on.clipboard", @"kb_didTapPaste", @"kb_didLongPressPaste:",
+            @[@"doc.on.clipboard", @17.0, @"kb_didTapPaste", @"kb_didLongPressPaste:",
               @"Paste", @"Long press to select all and copy"],
-            @[@"chevron.backward.circle", @"kb_didTapLeft", @"kb_didLongPressLeft:",
+            @[@"chevron.backward.circle", @20.5, @"kb_didTapLeft", @"kb_didLongPressLeft:",
               @"Move cursor left", @"Long press to move to the beginning"],
-            @[@"arrow.right.circle", @"kb_didTapRight", @"kb_didLongPressRight:",
+            @[@"chevron.right.circle", @20.5, @"kb_didTapRight", @"kb_didLongPressRight:",
               @"Move cursor right", @"Long press to move to the end"],
-            @[@"keyboard.chevron.compact.down", @"kb_didTapDismiss",
-              @"kb_didLongPressDismiss:", @"Dismiss keyboard",
+            @[@"keyboard.chevron.compact.down", @18.0,
+              @"kb_didTapDismiss", @"kb_didLongPressDismiss:", @"Dismiss keyboard",
               @"Long press to clear all text"],
         ];
         for (NSUInteger index = 0; index < specs.count; index++) {
             NSArray *spec = specs[index];
             UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
             button.tag = kButtonTagBase + index;
-            [button setImage:[UIImage systemImageNamed:spec[0]]
+            button.bounds = CGRectMake(0.0, 0.0, 60.0, 44.0);
+            UIImageSymbolConfiguration *configuration =
+                [UIImageSymbolConfiguration configurationWithPointSize:[spec[1] doubleValue]
+                                                                 weight:UIImageSymbolWeightRegular];
+            [button setImage:[UIImage systemImageNamed:spec[0]
+                                       withConfiguration:configuration]
                     forState:UIControlStateNormal];
-            button.tintColor = [UIColor labelColor];
-            button.accessibilityLabel = spec[3];
-            button.accessibilityHint = spec[4];
-            [button addTarget:self action:NSSelectorFromString(spec[1])
+            button.accessibilityLabel = spec[4];
+            button.accessibilityHint = spec[5];
+            [button addTarget:self action:NSSelectorFromString(spec[2])
                forControlEvents:UIControlEventTouchUpInside];
 
             UILongPressGestureRecognizer *longPress =
                 [[UILongPressGestureRecognizer alloc]
-                    initWithTarget:self action:NSSelectorFromString(spec[2])];
+                    initWithTarget:self action:NSSelectorFromString(spec[3])];
             longPress.minimumPressDuration = 0.3;
             longPress.cancelsTouchesInView = YES;
             [button addGestureRecognizer:longPress];
